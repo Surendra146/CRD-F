@@ -1,53 +1,126 @@
-import { useEffect } from "react";
-import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import axios from "axios";
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { DashboardProvider } from './context/DashboardContext';
+import { Toaster } from './components/ui/sonner';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import DashboardList from './pages/DashboardList';
+import DashboardBuilder from './pages/DashboardBuilder';
+import ExcelUpload from './pages/ExcelUpload';
+import ColumnMapping from './pages/ColumnMapping';
+import './App.css';
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+const ProtectedRoute = ({ children }) => {
+  const { user, loading } = useAuth();
+  
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-black border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-sm text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  if (!user || user === false) {
+    return <Navigate to="/login" replace />;
+  }
+  
+  return children;
+};
 
-const Home = () => {
-  const helloWorldApi = async () => {
-    try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
-    }
-  };
-
-  useEffect(() => {
-    helloWorldApi();
-  }, []);
-
-  return (
-    <div>
-      <header className="App-header">
-        <a
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
-  );
+const PublicRoute = ({ children }) => {
+  const { user, loading } = useAuth();
+  
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-black border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-sm text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  if (user && user !== false) {
+    return <Navigate to="/dashboards" replace />;
+  }
+  
+  return children;
 };
 
 function App() {
   return (
-    <div className="App">
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
-    </div>
+    <Router>
+      <AuthProvider>
+        <DashboardProvider>
+          <div className="App">
+            <Routes>
+              <Route path="/" element={<Navigate to="/dashboards" replace />} />
+              
+              <Route
+                path="/login"
+                element={
+                  <PublicRoute>
+                    <Login />
+                  </PublicRoute>
+                }
+              />
+              
+              <Route
+                path="/register"
+                element={
+                  <PublicRoute>
+                    <Register />
+                  </PublicRoute>
+                }
+              />
+              
+              <Route
+                path="/dashboards"
+                element={
+                  <ProtectedRoute>
+                    <DashboardList />
+                  </ProtectedRoute>
+                }
+              />
+              
+              <Route
+                path="/dashboards/:id"
+                element={
+                  <ProtectedRoute>
+                    <DashboardBuilder />
+                  </ProtectedRoute>
+                }
+              />
+              
+              <Route
+                path="/dashboards/:id/upload"
+                element={
+                  <ProtectedRoute>
+                    <ExcelUpload />
+                  </ProtectedRoute>
+                }
+              />
+              
+              <Route
+                path="/dashboards/:id/map-columns"
+                element={
+                  <ProtectedRoute>
+                    <ColumnMapping />
+                  </ProtectedRoute>
+                }
+              />
+            </Routes>
+            <Toaster position="top-right" richColors closeButton />
+          </div>
+        </DashboardProvider>
+      </AuthProvider>
+    </Router>
   );
 }
 
