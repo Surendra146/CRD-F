@@ -1,0 +1,94 @@
+{
+  "theme": "light",
+  "archetype": "Swiss & High-Contrast",
+  "archetype_reasoning": "As a B2B SaaS dashboard requiring clarity, density, and authority, the Swiss & High-Contrast archetype fits perfectly. It uses a stark monochrome palette with sparse, functional colors for data visualization and critical actions.",
+  "colors": {
+    "background": "#FFFFFF",
+    "surface": "#F9FAFB",
+    "surface_alt": "#F3F4F6",
+    "border": "#E5E7EB",
+    "border_hover": "#D1D5DB",
+    "text_primary": "#0A0A0A",
+    "text_secondary": "#4B5563",
+    "text_muted": "#9CA3AF",
+    "primary": "#0A0A0A",
+    "primary_hover": "#27272A",
+    "primary_foreground": "#FFFFFF",
+    "accent_blue": "#002FA7",
+    "accent_red": "#FF2A2A",
+    "accent_yellow": "#FFC800",
+    "chart_palette": [
+      "#0A0A0A",
+      "#002FA7",
+      "#FF2A2A",
+      "#FFC800",
+      "#4B5563"
+    ]
+  },
+  "typography": {
+    "heading_font": "Cabinet Grotesk",
+    "body_font": "IBM Plex Sans",
+    "rules": {
+      "h1": "text-3xl sm:text-4xl font-black tracking-tighter",
+      "h2": "text-2xl sm:text-3xl font-extrabold tracking-tight",
+      "h3": "text-xl sm:text-2xl font-bold tracking-tight",
+      "body": "text-sm sm:text-base leading-relaxed text-gray-800",
+      "labels": "text-xs font-bold uppercase tracking-[0.2em] text-gray-500"
+    }
+  },
+  "spacing_and_layout": {
+    "philosophy": "Strict grid hierarchy, dense and compact spacing.",
+    "container_padding": "p-6 md:p-8",
+    "bento_grid": "grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6",
+    "borders": "border border-gray-200",
+    "radius": "rounded-none md:rounded-sm",
+    "alignment": "Optical alignment over geometrical. Center-align only if strictly needed for visual hierarchy."
+  },
+  "components": {
+    "strategy": "Shadcn components, highly customized. Avoid excessive card usage—go cardless, rectangular, flat, and dense.",
+    "buttons": "Flat, sharp edges (rounded-none). Primary: black bg, white text. Secondary: transparent, 1px black border. Explicit hover states (e.g., hover:bg-gray-900 hover:text-white).",
+    "inputs": "Flat, 1px border, focus:ring-2 focus:ring-black focus:border-black, rounded-none.",
+    "tables": "Dense rows, left-aligned, sticky headers, subtle border-b on rows. No alternating background colors.",
+    "charts": "Recharts or Shadcn charts. Use the high-contrast chart_palette.",
+    "navigation": "Sticky top nav with backdrop-blur-xl bg-white/80, 1px bottom border.",
+    "modals": "Backdrop blur on overlay, solid white background for modal surface, sharp borders."
+  },
+  "motion": {
+    "philosophy": "Minimalist — use micro-interactions for feedback.",
+    "hover": "Subtle background shifts or border darkening. Button hovers must explicitly define text color.",
+    "transitions": "transition-all duration-200 ease-in-out"
+  },
+  "icons": {
+    "library": "@phosphor-icons/react",
+    "style": "Regular or bold, avoiding overly thin line weights. Dense and functional."
+  },
+  "testing": {
+    "data_testid": "MANDATORY on all interactive and key informational elements. Format: kebab-case, role-based."
+  },
+  "media": {
+    "login_background": {
+      "url": "https://images.unsplash.com/photo-1762535371664-017f7b938f62?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MTJ8MHwxfHNlYXJjaHwxfHxtaW5pbWFsaXN0JTIwYXJjaGl0ZWN0dXJlJTIwY2xlYW4lMjBsaWdodHxlbnwwfHx8fDE3NzQ5MzgyMDV8MA&ixlib=rb-4.1.0&q=85",
+      "description": "Minimalist architecture, clean light. Use as a split-screen background for the Auth layout."
+    },
+    "avatars": [
+      {
+        "url": "https://images.unsplash.com/photo-1629507208649-70919ca33793?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTZ8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBidXNpbmVzcyUyMHBvcnRyYWl0fGVufDB8fHx8MTc3NDkzODIwNnww&ixlib=rb-4.1.0&q=85",
+        "description": "Professional user avatar 1."
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1629507313712-f21468afdf2e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTZ8MHwxfHNlYXJjaHwyfHxwcm9mZXNzaW9uYWwlMjBidXNpbmVzcyUyMHBvcnRyYWl0fGVufDB8fHx8MTc3NDkzODIwNnww&ixlib=rb-4.1.0&q=85",
+        "description": "Professional user avatar 2."
+      }
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Install fonts: Use @fontsource for Cabinet Grotesk and IBM Plex Sans, or add to HTML head.",
+    "Install icons: `yarn add @phosphor-icons/react`.",
+    "Install Recharts: `yarn add recharts`.",
+    "Initialize Shadcn with CSS variables and apply the stark monochrome palette to `tailwind.config.js`.",
+    "Ensure all dashboard widgets stretch to fill their grid cells (use `h-full`).",
+    "For the drag-and-drop builder, use `dnd-kit` or `@hello-pangea/dnd`.",
+    "For Excel upload, use `react-dropzone` and `xlsx`.",
+    "Apply `data-testid` to all interactive elements."
+  ]
+}
