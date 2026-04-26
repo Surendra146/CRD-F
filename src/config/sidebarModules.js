@@ -1,0 +1,108 @@
+import {
+  BarChart3,
+  FileText,
+  LayoutDashboard,
+  MessageCircle,
+  PanelsTopLeft,
+  Settings,
+  Target,
+  Upload,
+  ShieldCheck,
+  Users,
+  UserPlus,
+} from 'lucide-react';
+
+export const sidebarModules = [
+  {
+    key: 'dashboard',
+    label: 'Dashboard',
+    href: '/dashboard',
+    icon: LayoutDashboard,
+    roles: ['viewer'],
+    enabled: true,
+  },
+  {
+    key: 'customers',
+    label: 'Customers',
+    href: '/customers',
+    icon: Users,
+    roles: ['viewer'],
+    enabled: true,
+  },
+  {
+    key: 'analytics',
+    label: 'Analytics',
+    href: '/analytics',
+    icon: BarChart3,
+    roles: ['viewer'],
+    enabled: true,
+  },
+  {
+    key: 'custom-dashboards',
+    label: 'Custom Dashboards',
+    href: '/dashboards',
+    icon: PanelsTopLeft,
+    roles: ['viewer'],
+    enabled: true,
+  },
+  {
+    key: 'import',
+    label: 'Import Data',
+    href: '/import',
+    icon: Upload,
+    roles: ['manager'],
+    enabled: true,
+  },
+  {
+    key: 'campaigns',
+    label: 'Campaigns',
+    href: '/campaigns',
+    icon: Target,
+    roles: ['viewer'],
+    enabled: true,
+  },
+  {
+    key: 'whatsapp',
+    label: 'WhatsApp',
+    href: '/whatsapp',
+    icon: MessageCircle,
+    roles: ['analyst'],
+    enabled: true,
+  },
+  {
+    key: 'templates',
+    label: 'Templates',
+    href: '/templates',
+    icon: FileText,
+    roles: ['viewer'],
+    enabled: true,
+  },
+  
+  {
+    key: 'roles',
+    label: 'Roles',
+    href: '/roles',
+    icon: ShieldCheck,
+    roles: ['admin'],
+    enabled: true,
+  },
+  {
+    key: 'users',
+    label: 'Users',
+    href: '/users',
+    icon: UserPlus,
+    roles: ['admin'],
+    enabled: true,
+  },
+  {
+    key: 'settings',
+    label: 'Settings',
+    href: '/settings',
+    icon: Settings,
+    roles: ['viewer'],
+    enabled: true,
+  },
+];
+
+export const getEnabledSidebarModules = () =>
+  sidebarModules.filter((module) => module.enabled !== false);
