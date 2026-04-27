@@ -21,7 +21,7 @@ import Select from '../../components/UI/select';
 import { useDashboard } from '../../context/useDashboard';
 import { formatApiError } from '../../services/api';
 import { customDashboardAnalyticsApi } from '../../services/analytics';
-import { formatCurrency } from '../../utils/helper';
+import { formatCurrency } from '../../utils/helpers';
 
 const CHART_COLORS = ['#0A0A0A', '#002FA7', '#FF2A2A', '#FFC800', '#4B5563'];
 

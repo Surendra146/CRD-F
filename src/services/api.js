@@ -14,6 +14,15 @@ export {
   whatsappPhoneNumberId,
 } from '../config/apiConfig';
 
-export { default } from '../config/api';
+export { default } from '../config/apiConfig';
 
-export * from './customer/customers';
+export * from './customers';
+export * from './campaigns';
+export * from './segments';
+export * from './templates';
+export * from './communications';
+export * from './dashboards';
+export * from './analytics';
+export * from './excel';
+export * from './notifications';
+export * from './auth';    

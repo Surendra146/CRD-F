@@ -20,10 +20,8 @@ import { uploadsApi } from '../../services/uploads';
 
 const mandatoryFieldsByImportType = {
   customer_details: [
-    { value: 'externalId', label: 'Customer Code' },
     { value: 'name', label: 'Customer Name' },
     { value: 'demographics.location.locationName', label: 'Location Name' },
-    { value: 'demographics.location.locationCode', label: 'Location Code' },
     { value: 'phone', label: 'Phone Number' },
     { value: 'address', label: 'Address' },
     { value: 'demographics.location.country', label: 'Country' },
@@ -33,7 +31,6 @@ const mandatoryFieldsByImportType = {
   ],
 
   customer_sales: [
-    { value: 'demographics.location.locationCode', label: 'Location Code' },
     { value: 'demographics.location.locationName', label: 'Location Name' },
     { value: 'name', label: 'Customer Name' },
     { value: 'phone', label: 'Phone Number' },
@@ -70,6 +67,32 @@ const getMissingMandatoryFields = (mappings, importType) => {
   );
 };
 
+const derivedTargetFieldSet = new Set(['externalId', 'demographics.location.locationCode']);
+
+const withDerivedCodeMappings = (mappings) => {
+  const validMappings = getValidColumnMappings(mappings);
+  const mappingByTarget = new Map(validMappings.map((item) => [item.targetField, item]));
+  const enrichedMappings = [...validMappings];
+
+  const phoneMapping = mappingByTarget.get('phone');
+  if (!mappingByTarget.has('externalId') && phoneMapping) {
+    enrichedMappings.push({
+      ...phoneMapping,
+      targetField: 'externalId',
+    });
+  }
+
+  const locationNameMapping = mappingByTarget.get('demographics.location.locationName');
+  if (!mappingByTarget.has('demographics.location.locationCode') && locationNameMapping) {
+    enrichedMappings.push({
+      ...locationNameMapping,
+      targetField: 'demographics.location.locationCode',
+    });
+  }
+
+  return enrichedMappings;
+};
+
 export default function Import() {
   const queryClient = useQueryClient();
 
@@ -82,11 +105,14 @@ export default function Import() {
   const [targetFieldOptions, setTargetFieldOptions] = useState(targetFieldOptionsFallback);
 
   const targetFieldOptionsWithMandatoryMarks = useMemo(() => {
+    const visibleTargetOptions = targetFieldOptions.filter(
+      (option) => !derivedTargetFieldSet.has(option.value)
+    );
     const mandatoryValues = new Set(
       (mandatoryFieldsByImportType[importType] || []).map((field) => field.value)
     );
 
-    return targetFieldOptions.map((option) => {
+    return visibleTargetOptions.map((option) => {
       if (!option.value || !mandatoryValues.has(option.value)) {
         return option;
       }
@@ -133,7 +159,7 @@ export default function Import() {
     mutationFn: (file) => uploadsApi.upload(file, importType),
 
     onSuccess: async (response) => {
-      const uploadedData = response.data.data;
+      const uploadedData = response?.data;
 
       addDebugEvent('Upload API succeeded', {
         uploadId: uploadedData.uploadId,
@@ -149,11 +175,11 @@ export default function Import() {
           uploadsApi.suggestMappings(uploadedData.columns, importType),
         ]);
 
-        const suggestions = suggestionsRes.data.data;
+        const suggestions = Array.isArray(suggestionsRes?.data) ? suggestionsRes.data : [];
 
         setTargetFieldOptions(
-          Array.isArray(fieldsRes?.data?.data) && fieldsRes.data.data.length
-            ? fieldsRes.data.data
+          Array.isArray(fieldsRes?.data) && fieldsRes.data.length
+            ? fieldsRes.data
             : targetFieldOptionsFallback
         );
 
@@ -164,10 +190,11 @@ export default function Import() {
 
         const mapping = uploadedData.columns.map((col) => {
           const suggestion = suggestions.find((item) => item.sourceColumn === col);
+          const suggestedTarget = suggestion?.targetField || '';
 
           return {
             sourceColumn: col,
-            targetField: suggestion?.targetField || '',
+            targetField: derivedTargetFieldSet.has(suggestedTarget) ? '' : suggestedTarget,
             transformation: 'none',
           };
         });
@@ -217,12 +244,12 @@ export default function Import() {
     },
 
     onSuccess: (response) => {
-      const statusFromApi = response?.data?.data?.status || 'processing';
+      const statusFromApi = response?.data?.status || 'processing';
 
       addDebugEvent('Process API responded', {
         uploadId: uploadData?.uploadId,
         apiStatus: statusFromApi,
-        message: response?.data?.message || null,
+        message: response?.message || null,
       });
 
       const nextStatus = {
@@ -261,18 +288,20 @@ export default function Import() {
   const mappingMutation = useMutation({
     mutationFn: () => {
       const validColumnMappings = getValidColumnMappings(columnMapping);
+      const mappedWithDerivedCodes = withDerivedCodeMappings(columnMapping);
 
       addDebugEvent('Saving column mapping', {
         uploadId: uploadData?.uploadId,
         totalMappings: columnMapping.length,
         mappedColumns: validColumnMappings.length,
+        mappedColumnsWithDerivedCodes: mappedWithDerivedCodes.length,
       });
 
       if (validColumnMappings.length === 0) {
         throw new Error('Please map at least one column before processing');
       }
 
-      const missingMandatoryFields = getMissingMandatoryFields(columnMapping, importType);
+      const missingMandatoryFields = getMissingMandatoryFields(mappedWithDerivedCodes, importType);
 
       if (missingMandatoryFields.length > 0) {
         const firstMissingField = missingMandatoryFields[0];
@@ -286,7 +315,7 @@ export default function Import() {
         throw new Error(message);
       }
 
-      return uploadsApi.setMapping(uploadData.uploadId, validColumnMappings);
+      return uploadsApi.setMapping(uploadData.uploadId, mappedWithDerivedCodes);
     },
 
     onSuccess: () => {
@@ -311,7 +340,7 @@ export default function Import() {
 
   const { data: historyData } = useQuery({
     queryKey: ['upload-history'],
-    queryFn: () => uploadsApi.getHistory({ limit: 5 }).then((res) => res.data),
+    queryFn: () => uploadsApi.getHistory({ limit: 5 }),
   });
 
   const onDrop = useCallback(

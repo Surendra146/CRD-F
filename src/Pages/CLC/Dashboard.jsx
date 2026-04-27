@@ -47,7 +47,7 @@ function ChartFallback() {
 export default function Dashboard() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['dashboard'],
-    queryFn: () => analyticsApi.getDashboard().then((res) => res.data.data),
+    queryFn: () => analyticsApi.getDashboard().then((res) => res?.data || res),
   });
 
   if (isLoading) {

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useDashboard } from '../../context/useDashboard';
 import { useAuthStore } from '../../store/authstore';
 import { Plus, ChartLine, Calendar, Trash } from '@phosphor-icons/react';
-import { formatDate } from '../../utils/helper';
+import { formatDate } from '../../utils/helpers';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -66,7 +66,9 @@ const DashboardList = () => {
       toast.success('Dashboard created successfully!');
       setIsCreateOpen(false);
       setFormData({ name: '', description: '', excelSourcesCount: 1, sourceNames: [''] });
-      navigate(`/dashboards/${dashboard._id}/upload`);
+      if (dashboard?._id) {
+        navigate(`/dashboards/${dashboard._id}/upload`);
+      }
     } catch (err) {
       toast.error(err.message || 'Failed to create dashboard');
     } finally {
@@ -195,7 +197,7 @@ const DashboardList = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-            {dashboards.map((dashboard) => (
+            {dashboards.filter((dashboard) => dashboard?._id).map((dashboard) => (
               <div
                 key={dashboard._id}
                 onClick={() => navigate(`/dashboards/${dashboard._id}`)}

@@ -17,7 +17,7 @@ import Badge from '../../components/UI/badge.jsx';
 import Button from '../../components/UI/button.jsx';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/UI/card.jsx';
 import Loader from '../../components/UI/loader.jsx';
-import { customersApi } from '../../services/customers';
+import { customersApi } from '../../services/customers.js';
 import {
   formatCurrency,
   formatDate,
@@ -222,10 +222,6 @@ export default function CustomerDetail() {
               <div>
                 <p className="text-xs uppercase tracking-wide text-gray-400">Gender</p>
                 <p className="mt-1 text-sm text-gray-800">{demographics.gender || 'Not provided'}</p>
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-wide text-gray-400">External ID</p>
-                <p className="mt-1 text-sm text-gray-800">{customer.externalId || 'Not linked'}</p>
               </div>
               <div>
                 <p className="text-xs uppercase tracking-wide text-gray-400">Average Order Value</p>

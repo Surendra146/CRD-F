@@ -1,23 +1,111 @@
-import api from '../config/api';
-import { buildPath } from './resourceApi';
+import { BASE_URL, fetchWrapper } from '../config/apiConfig';
 
-const basePath = '/api/auth';
+const AUTH_URL = `${BASE_URL}/api/auth`;
 
 export const authApi = {
-  login: (email, password) => api.post(buildPath(basePath, 'login'), { email, password }),
-  register: (data) => api.post(buildPath(basePath, 'register'), data),
-  verifyPhoneOtp: (otp) => api.post(buildPath(basePath, 'verify-phone-otp'), { otp }),
-  getMe: () => api.get(buildPath(basePath, 'me')),
-  getOrganizationSettings: () => api.get(buildPath(basePath, 'organization-settings')),
-  updateOrganizationSettings: (data) => api.patch(buildPath(basePath, 'organization-settings'), data),
-  getMembers: () => api.get(buildPath(basePath, 'members')),
-  getRoles: () => api.get(buildPath(basePath, 'roles')),
-  createRole: (data) => api.post(buildPath(basePath, 'roles'), data),
-  updateRole: (roleKey, data) => api.patch(buildPath(basePath, 'roles', roleKey), data),
-  createMember: (data) => api.post(buildPath(basePath, 'members'), data),
-  updateMember: (userId, data) => api.patch(buildPath(basePath, 'members', userId), data),
-  updateMemberRole: (userId, role) =>
-    api.patch(buildPath(basePath, 'members', userId, 'role'), { role }),
-  updateMemberAccess: (userId, data) =>
-    api.patch(buildPath(basePath, 'members', userId, 'role'), data),
+  /* =========================
+     AUTH
+  ========================= */
+  login: async (email, password) => {
+    return fetchWrapper(`${AUTH_URL}/login`, {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+  },
+
+  register: async (data) => {
+    return fetchWrapper(`${AUTH_URL}/register`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  verifyPhoneOtp: async (otp) => {
+    return fetchWrapper(`${AUTH_URL}/verify-phone-otp`, {
+      method: 'POST',
+      body: JSON.stringify({ otp }),
+    });
+  },
+
+  /* =========================
+     USER / ORG
+  ========================= */
+  getMe: async () => {
+    return fetchWrapper(`${AUTH_URL}/me`, {
+      method: 'GET',
+    });
+  },
+
+  getOrganizationSettings: async () => {
+    return fetchWrapper(`${AUTH_URL}/organization-settings`, {
+      method: 'GET',
+    });
+  },
+
+  updateOrganizationSettings: async (data) => {
+    return fetchWrapper(`${AUTH_URL}/organization-settings`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /* =========================
+     MEMBERS
+  ========================= */
+  getMembers: async () => {
+    return fetchWrapper(`${AUTH_URL}/members`, {
+      method: 'GET',
+    });
+  },
+
+  createMember: async (data) => {
+    return fetchWrapper(`${AUTH_URL}/members`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateMember: async (userId, data) => {
+    return fetchWrapper(`${AUTH_URL}/members/${userId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateMemberRole: async (userId, role) => {
+    return fetchWrapper(`${AUTH_URL}/members/${userId}/role`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role }),
+    });
+  },
+
+  updateMemberAccess: async (userId, data) => {
+    return fetchWrapper(`${AUTH_URL}/members/${userId}/role`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /* =========================
+     ROLES
+  ========================= */
+  getRoles: async () => {
+    return fetchWrapper(`${AUTH_URL}/roles`, {
+      method: 'GET',
+    });
+  },
+
+  createRole: async (data) => {
+    return fetchWrapper(`${AUTH_URL}/roles`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateRole: async (roleKey, data) => {
+    return fetchWrapper(`${AUTH_URL}/roles/${roleKey}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
 };

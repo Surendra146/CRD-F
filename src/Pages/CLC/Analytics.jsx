@@ -8,8 +8,11 @@ import Loader from '../../components/UI/loader.jsx';
 import { analyticsApi } from '../../services/analytics.js';
 import { formatCurrency, formatNumber } from '../../utils/format.js';
 
+/* =========================
+   FIXED NORMALIZER
+========================= */
 function normalizeData(payload) {
-  return payload?.data?.data || payload?.data || payload || null;
+  return payload?.data || payload || null;
 }
 
 function sumRevenue(entries) {
@@ -19,24 +22,27 @@ function sumRevenue(entries) {
 }
 
 export default function Analytics() {
+  /* =========================
+     FIXED QUERY CALLS
+  ========================= */
   const dashboardQuery = useQuery({
     queryKey: ['analytics-dashboard-summary'],
-    queryFn: () => analyticsApi.getDashboard().then(normalizeData),
+    queryFn: () => analyticsApi.getDashboard(),
   });
 
   const segmentsQuery = useQuery({
     queryKey: ['analytics-segments'],
-    queryFn: () => analyticsApi.getSegments().then(normalizeData),
+    queryFn: () => analyticsApi.getSegments(),
   });
 
   const revenueQuery = useQuery({
     queryKey: ['analytics-revenue'],
-    queryFn: () => analyticsApi.getRevenue().then(normalizeData),
+    queryFn: () => analyticsApi.getRevenue(),
   });
 
   const churnQuery = useQuery({
     queryKey: ['analytics-churn'],
-    queryFn: () => analyticsApi.getChurn().then(normalizeData),
+    queryFn: () => analyticsApi.getChurn(),
   });
 
   const isLoading =
@@ -44,24 +50,41 @@ export default function Analytics() {
     segmentsQuery.isLoading ||
     revenueQuery.isLoading ||
     churnQuery.isLoading;
+
   const hasAnyError =
     dashboardQuery.isError ||
     segmentsQuery.isError ||
     revenueQuery.isError ||
     churnQuery.isError;
 
-  const dashboard = dashboardQuery.data || {};
+  /* =========================
+     FIXED DATA ACCESS
+  ========================= */
+  const dashboard = normalizeData(dashboardQuery.data) || {};
+  const segments = normalizeData(segmentsQuery.data) || [];
+  const revenue = normalizeData(revenueQuery.data) || {};
+  const churn = normalizeData(churnQuery.data) || {};
+
   const overview = dashboard.overview || {};
   const dashboardRevenue = dashboard.revenue || {};
-  const segments = Array.isArray(segmentsQuery.data) ? segmentsQuery.data : [];
-  const revenue = revenueQuery.data || {};
-  const churn = churnQuery.data || {};
 
-  const churnedCount = Array.isArray(churn.churnedCustomers) ? churn.churnedCustomers.length : 0;
-  const atRiskCount = Array.isArray(churn.atRiskCustomers) ? churn.atRiskCustomers.length : 0;
+  const churnedCount = Array.isArray(churn.churnedCustomers)
+    ? churn.churnedCustomers.length
+    : 0;
+
+  const atRiskCount = Array.isArray(churn.atRiskCustomers)
+    ? churn.atRiskCustomers.length
+    : 0;
+
   const totalCustomers = overview.totalCustomers || 0;
-  const churnRate = totalCustomers ? (churnedCount / totalCustomers) * 100 : 0;
-  const totalRevenue = dashboardRevenue.totalRevenue || sumRevenue(revenue.dailyRevenue);
+
+  const churnRate = totalCustomers
+    ? (churnedCount / totalCustomers) * 100
+    : 0;
+
+  const totalRevenue =
+    dashboardRevenue.totalRevenue ||
+    sumRevenue(revenue.dailyRevenue);
 
   const summaryCards = [
     {
@@ -143,11 +166,14 @@ export default function Analytics() {
               <CardTitle>Segment Distribution</CardTitle>
             </CardHeader>
             <CardContent>
-              {segments.length ? (
+              {Array.isArray(segments) && segments.length ? (
                 <div className="space-y-4">
                   {segments.map((segment) => {
                     const count = segment.count || 0;
-                    const percentage = totalCustomers ? Math.round((count / totalCustomers) * 100) : 0;
+                    const percentage = totalCustomers
+                      ? Math.round((count / totalCustomers) * 100)
+                      : 0;
+
                     return (
                       <div key={segment._id || 'unknown'}>
                         <div className="mb-2 flex items-center justify-between text-sm">
@@ -169,7 +195,9 @@ export default function Analytics() {
                   })}
                 </div>
               ) : (
-                <p className="text-sm text-gray-500">No segment analytics are available yet.</p>
+                <p className="text-sm text-gray-500">
+                  No segment analytics are available yet.
+                </p>
               )}
             </CardContent>
           </Card>
@@ -180,19 +208,27 @@ export default function Analytics() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="rounded-lg border border-gray-200 p-4">
-                <p className="text-xs uppercase tracking-wide text-gray-400">Total Revenue</p>
+                <p className="text-xs uppercase tracking-wide text-gray-400">
+                  Total Revenue
+                </p>
                 <p className="mt-2 text-xl font-semibold text-gray-900">
                   {formatCurrency(totalRevenue)}
                 </p>
               </div>
+
               <div className="rounded-lg border border-gray-200 p-4">
-                <p className="text-xs uppercase tracking-wide text-gray-400">Average Lifetime Value</p>
+                <p className="text-xs uppercase tracking-wide text-gray-400">
+                  Average Lifetime Value
+                </p>
                 <p className="mt-2 text-xl font-semibold text-gray-900">
                   {formatCurrency(dashboardRevenue.avgLifetimeValue || 0)}
                 </p>
               </div>
+
               <div className="rounded-lg border border-gray-200 p-4">
-                <p className="text-xs uppercase tracking-wide text-gray-400">Churn Summary</p>
+                <p className="text-xs uppercase tracking-wide text-gray-400">
+                  Churn Summary
+                </p>
                 <p className="mt-2 text-xl font-semibold text-gray-900">
                   {formatNumber(churnedCount)} customers
                 </p>
@@ -200,11 +236,12 @@ export default function Analytics() {
                   {Number(churnRate).toFixed(1)}% churn rate
                 </p>
               </div>
-              {hasAnyError ? (
+
+              {hasAnyError && (
                 <p className="text-sm text-red-500">
-                  Some analytics endpoints are unavailable right now, so this view may be incomplete.
+                  Some analytics endpoints are unavailable right now.
                 </p>
-              ) : null}
+              )}
             </CardContent>
           </Card>
         </div>

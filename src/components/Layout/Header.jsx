@@ -20,7 +20,7 @@ export default function Header({ title, subtitle, actions }) {
 
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['notifications'],
-    queryFn: () => notificationsApi.getAll().then((res) => res.data),
+    queryFn: () => notificationsApi.getAll(),
     staleTime: 1000 * 60,
   });
 

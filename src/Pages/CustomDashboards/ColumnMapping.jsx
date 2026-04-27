@@ -24,11 +24,18 @@ export default function ColumnMapping() {
   useEffect(() => {
     const fetchExcelData = async () => {
       try {
-        const { data } = await excelApi.getByDashboardId(id);
-        setExcelData(data);
+        const response = await excelApi.getByDashboardId(id);
+        const data = Array.isArray(response)
+          ? response
+          : Array.isArray(response?.data)
+            ? response.data
+            : [];
+        const validData = data.filter((record) => record && typeof record === 'object' && record._id);
+
+        setExcelData(validData);
 
         const initialMappings = {};
-        data.forEach((record) => {
+        validData.forEach((record) => {
           initialMappings[record._id] = {};
         });
         setMappings(initialMappings);
@@ -76,7 +83,8 @@ export default function ColumnMapping() {
           description="Map your Excel columns to system fields before building dashboards"
           showCard={false}
           sections={excelData.map((record) => {
-            const headers = Object.keys(record.rawData?.[0] || {});
+            const rows = Array.isArray(record.rawData) ? record.rawData : [];
+            const headers = Object.keys(rows[0] || {});
 
             return {
               key: record._id,
@@ -84,7 +92,7 @@ export default function ColumnMapping() {
               preview: {
                 title: 'Preview',
                 columns: headers,
-                rows: record.rawData.slice(0, 5),
+                rows: rows.slice(0, 5),
                 mappedHeaderValues: mappings[record._id] || {},
                 caption: 'Showing first 5 rows for preview',
               },

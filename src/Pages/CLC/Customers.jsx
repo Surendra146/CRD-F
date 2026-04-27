@@ -31,7 +31,7 @@ import {
   TableHeader,
   TableRow,
 } from '../../components/UI/table.jsx';
-import { customersApi } from '../../services/customers';
+import { customersApi } from '../../services/customers.js';
 import { formatCurrency, formatRelativeTime } from '../../utils/format.js';
 
 const statusOptions = [
@@ -74,8 +74,7 @@ export default function Customers() {
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['customers', filters],
-    queryFn: () => customersApi.getAll(filters).then((res) => res.data),
-  });
+    queryFn: () => customersApi.getAll(filters),});
 
   const addCommentMutation = useMutation({
     mutationFn: ({ customerId, message }) =>
@@ -166,7 +165,7 @@ export default function Customers() {
                 <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="Search by customer code, name, phone, location..."
+                  placeholder="Search by name, phone, location..."
                   value={filters.search}
                   onChange={handleSearch}
                   className="w-full rounded-lg border border-gray-300 py-2 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-primary-500"
@@ -245,7 +244,6 @@ export default function Customers() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Customer</TableHead>
-                    <TableHead>Customer Code</TableHead>
                     <TableHead>Location</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Total Spent</TableHead>
@@ -278,19 +276,9 @@ export default function Customers() {
                       </TableCell>
 
                       <TableCell>
-                        <span className="text-sm text-gray-700">
-                          {customer.externalId || '-'}
-                        </span>
-                      </TableCell>
-
-                      <TableCell>
                         <div>
                           <p className="text-sm font-medium text-gray-700">
                             {customer.demographics?.location?.locationName || '-'}
-                          </p>
-
-                          <p className="text-xs text-gray-500">
-                            {customer.demographics?.location?.locationCode || '-'}
                           </p>
 
                           <p className="text-xs text-gray-400">

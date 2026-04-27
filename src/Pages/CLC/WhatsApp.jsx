@@ -28,7 +28,7 @@ import {
   TableRow,
 } from '../../components/UI/table.jsx';
 import { communicationsApi } from '../../services/communications.js';
-import { customersApi } from '../../services/customers';
+import { customersApi } from '../../services/customers.js';
 import {
   formatApiError,
   whatsappGraphVersion,
@@ -56,7 +56,15 @@ const segmentOptions = [
 ];
 
 function normalizeCustomers(payload) {
-  return payload?.data?.data || payload?.data?.items || payload?.data || [];
+  const customers =
+    payload?.data ||
+    payload?.items ||
+    payload?.customers ||
+    payload?.data?.data ||
+    payload?.data?.items ||
+    [];
+
+  return Array.isArray(customers) ? customers : [];
 }
 
 function cleanPhoneNumber(value) {
@@ -65,7 +73,9 @@ function cleanPhoneNumber(value) {
 
 function buildWhatsAppLink(phone, message) {
   const cleanedPhone = cleanPhoneNumber(phone);
+
   if (!cleanedPhone) return null;
+
   return `https://wa.me/${cleanedPhone}?text=${encodeURIComponent(message)}`;
 }
 
@@ -113,28 +123,35 @@ export default function WhatsApp() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['whatsapp-customers'],
     queryFn: () =>
-      customersApi
-        .getAll({ limit: 100, sortBy: 'createdAt', sortOrder: 'desc' })
-        .then(normalizeCustomers),
+      customersApi.getAll({
+        limit: 100,
+        sortBy: 'createdAt',
+        sortOrder: 'desc',
+      }),
   });
 
-  const customers = useMemo(() => (Array.isArray(data) ? data : []), [data]);
+  const customers = useMemo(() => normalizeCustomers(data), [data]);
 
   const reachableCustomers = useMemo(
     () =>
-      customers.filter((customer) => cleanPhoneNumber(customer.whatsappNumber || customer.phone)),
+      customers.filter((customer) =>
+        cleanPhoneNumber(customer.whatsappNumber || customer.phone)
+      ),
     [customers]
   );
 
   const filteredCustomers = useMemo(() => {
     if (!selectedSegment) return reachableCustomers;
+
     return reachableCustomers.filter(
       (customer) => customer.lifecycle?.segment === selectedSegment
     );
   }, [reachableCustomers, selectedSegment]);
 
   const selectedCustomer = useMemo(
-    () => reachableCustomers.find((customer) => customer._id === selectedCustomerId) || null,
+    () =>
+      reachableCustomers.find((customer) => customer._id === selectedCustomerId) ||
+      null,
     [reachableCustomers, selectedCustomerId]
   );
 
@@ -158,28 +175,39 @@ export default function WhatsApp() {
         channel: 'whatsapp',
         message: outgoingMessage,
       }),
+
     onSuccess: (response, variables) => {
       const providerMessage =
+        response?.message ||
         response?.data?.message ||
-        response?.data?.data?.message ||
         'WhatsApp message sent successfully';
 
       setLastDelivery({
         customerName: variables.customer.name,
-        phone: cleanPhoneNumber(variables.customer.whatsappNumber || variables.customer.phone),
+        phone: cleanPhoneNumber(
+          variables.customer.whatsappNumber || variables.customer.phone
+        ),
         mode: 'api',
         message: variables.outgoingMessage,
-        deliveryMode: response?.data?.data?.deliveryMode || 'text',
+        deliveryMode:
+          response?.deliveryMode ||
+          response?.data?.deliveryMode ||
+          response?.data?.data?.deliveryMode ||
+          'text',
       });
+
       toast.success(providerMessage);
     },
+
     onError: (error, variables) => {
       toast.error(formatApiError(error));
+
       if (variables?.allowFallback) {
         const fallbackLink = buildWhatsAppLink(
           variables.customer.whatsappNumber || variables.customer.phone,
           variables.outgoingMessage
         );
+
         if (fallbackLink) {
           window.open(fallbackLink, '_blank', 'noopener,noreferrer');
         }
@@ -203,6 +231,7 @@ export default function WhatsApp() {
     }
 
     const customerPhone = customer.whatsappNumber || customer.phone;
+
     if (!cleanPhoneNumber(customerPhone)) {
       toast.error('This customer does not have a valid phone number');
       return;
@@ -217,6 +246,7 @@ export default function WhatsApp() {
     }
 
     window.open(link, '_blank', 'noopener,noreferrer');
+
     setLastDelivery({
       customerName: customer.name,
       phone: cleanPhoneNumber(customerPhone),
@@ -232,6 +262,7 @@ export default function WhatsApp() {
     }
 
     const customerPhone = customer.whatsappNumber || customer.phone;
+
     if (!cleanPhoneNumber(customerPhone)) {
       toast.error('This customer does not have a valid phone number');
       return;
@@ -300,6 +331,7 @@ export default function WhatsApp() {
               <Users className="h-6 w-6 text-green-600" />
             </CardContent>
           </Card>
+
           <Card>
             <CardContent className="flex items-center justify-between p-6">
               <div>
@@ -311,13 +343,14 @@ export default function WhatsApp() {
               <Sparkles className="h-6 w-6 text-primary-600" />
             </CardContent>
           </Card>
+
           <Card>
             <CardContent className="flex items-center justify-between p-6">
               <div>
                 <p className="text-sm text-gray-500">Delivery Mode</p>
-                  <p className="mt-2 text-2xl font-semibold text-gray-900">
+                <p className="mt-2 text-2xl font-semibold text-gray-900">
                   {whatsappProvider === 'meta_cloud' ? 'Meta Cloud' : 'Manual Link'}
-                  </p>
+                </p>
               </div>
               <MessageCircle className="h-6 w-6 text-gray-700" />
             </CardContent>
@@ -329,6 +362,7 @@ export default function WhatsApp() {
             <CardHeader>
               <CardTitle>Message Composer</CardTitle>
             </CardHeader>
+
             <CardContent className="space-y-4">
               {isError ? (
                 <p className="text-sm text-red-500">
@@ -346,12 +380,21 @@ export default function WhatsApp() {
                     setSelectedCustomerId('');
                   }}
                 />
+
                 <Select
                   label="Template"
                   options={templateOptions}
                   value={templateType}
-                  onChange={(e) => setTemplateType(e.target.value)}
+                  onChange={(e) => {
+                    const nextTemplateType = e.target.value;
+                    setTemplateType(nextTemplateType);
+
+                    if (selectedCustomer) {
+                      setMessage(buildTemplateMessage(nextTemplateType, selectedCustomer));
+                    }
+                  }}
                 />
+
                 <Select
                   label="Customer"
                   options={customerOptions}
@@ -359,8 +402,12 @@ export default function WhatsApp() {
                   onChange={(e) => {
                     const nextCustomerId = e.target.value;
                     setSelectedCustomerId(nextCustomerId);
+
                     const nextCustomer =
-                      filteredCustomers.find((customer) => customer._id === nextCustomerId) || null;
+                      filteredCustomers.find(
+                        (customer) => customer._id === nextCustomerId
+                      ) || null;
+
                     setMessage(buildTemplateMessage(templateType, nextCustomer));
                   }}
                   placeholder="Choose customer"
@@ -370,14 +417,22 @@ export default function WhatsApp() {
               {selectedCustomer ? (
                 <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
                   <div className="flex flex-wrap items-center gap-3">
-                    <p className="font-medium text-gray-900">{selectedCustomer.name}</p>
+                    <p className="font-medium text-gray-900">
+                      {selectedCustomer.name}
+                    </p>
+
                     <Badge variant="info">
-                      {(selectedCustomer.lifecycle?.segment || 'unassigned').replace(/_/g, ' ')}
+                      {(selectedCustomer.lifecycle?.segment || 'unassigned').replace(
+                        /_/g,
+                        ' '
+                      )}
                     </Badge>
+
                     <span className="text-sm text-gray-500">
                       {selectedCustomer.whatsappNumber || selectedCustomer.phone}
                     </span>
                   </div>
+
                   <p className="mt-2 text-sm text-gray-600">
                     Last purchase:{' '}
                     {selectedCustomer.lifecycle?.lastPurchaseDate
@@ -394,6 +449,7 @@ export default function WhatsApp() {
                 >
                   Message
                 </label>
+
                 <textarea
                   id="whatsapp-message"
                   rows={7}
@@ -408,6 +464,7 @@ export default function WhatsApp() {
                 <Button variant="outline" onClick={applyTemplate}>
                   Apply Template
                 </Button>
+
                 <Button
                   onClick={() => handleSendViaApi()}
                   isLoading={sendWhatsAppMutation.isPending}
@@ -415,6 +472,7 @@ export default function WhatsApp() {
                   <Send className="mr-2 h-4 w-4" />
                   Send via API
                 </Button>
+
                 <Button onClick={() => handleOpenWhatsApp()}>
                   <MessageCircle className="mr-2 h-4 w-4" />
                   Open WhatsApp
@@ -427,27 +485,36 @@ export default function WhatsApp() {
             <CardHeader>
               <CardTitle>Send Setup</CardTitle>
             </CardHeader>
+
             <CardContent className="space-y-4">
               <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
                 <div className="flex items-start gap-3">
                   <div className="rounded-lg bg-white p-2">
                     <Globe className="h-5 w-5 text-gray-700" />
                   </div>
+
                   <div>
                     <p className="font-medium text-gray-900">API endpoint</p>
-                    <p className="mt-1 break-all text-sm text-gray-500">{whatsappSendPath}</p>
+                    <p className="mt-1 break-all text-sm text-gray-500">
+                      {whatsappSendPath}
+                    </p>
                   </div>
                 </div>
               </div>
 
               <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                <p className="text-sm font-medium text-gray-900">Meta Cloud target</p>
+                <p className="text-sm font-medium text-gray-900">
+                  Meta Cloud target
+                </p>
+
                 <p className="mt-2 text-sm text-gray-500">
                   Provider: {whatsappProvider}
                 </p>
+
                 <p className="mt-1 text-sm text-gray-500">
                   Graph version: {whatsappGraphVersion}
                 </p>
+
                 <p className="mt-1 break-all text-sm text-gray-500">
                   Phone number ID: {whatsappPhoneNumberId || 'Not configured'}
                 </p>
@@ -455,13 +522,21 @@ export default function WhatsApp() {
 
               {lastDelivery ? (
                 <div className="rounded-xl border border-green-200 bg-green-50 p-4">
-                  <p className="text-sm font-medium text-green-800">Last delivery</p>
+                  <p className="text-sm font-medium text-green-800">
+                    Last delivery
+                  </p>
+
                   <p className="mt-2 text-sm text-green-700">
                     {lastDelivery.customerName} ({lastDelivery.phone})
                   </p>
+
                   <p className="mt-1 text-sm text-green-700">
-                    Sent via {lastDelivery.mode === 'api' ? 'backend API' : 'manual WhatsApp link'}
+                    Sent via{' '}
+                    {lastDelivery.mode === 'api'
+                      ? 'backend API'
+                      : 'manual WhatsApp link'}
                   </p>
+
                   {lastDelivery.deliveryMode ? (
                     <p className="mt-1 text-sm text-green-700">
                       Meta delivery mode: {lastDelivery.deliveryMode}
@@ -472,6 +547,7 @@ export default function WhatsApp() {
 
               <div className="space-y-3">
                 <p className="text-sm font-medium text-gray-900">Quick Use Cases</p>
+
                 {quickTemplates.map((template) => (
                   <button
                     key={template.key}
@@ -486,9 +562,14 @@ export default function WhatsApp() {
                       <div className="rounded-lg bg-gray-100 p-2">
                         <template.icon className="h-5 w-5 text-gray-700" />
                       </div>
+
                       <div>
-                        <p className="font-medium text-gray-900">{template.label}</p>
-                        <p className="text-sm text-gray-500">{template.description}</p>
+                        <p className="font-medium text-gray-900">
+                          {template.label}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {template.description}
+                        </p>
                       </div>
                     </div>
                   </button>
@@ -502,6 +583,7 @@ export default function WhatsApp() {
           <CardHeader>
             <CardTitle>WhatsApp Ready Customers</CardTitle>
           </CardHeader>
+
           <CardContent className="p-0">
             {filteredCustomers.length ? (
               <Table>
@@ -515,34 +597,47 @@ export default function WhatsApp() {
                     <TableHead className="text-right">Action</TableHead>
                   </TableRow>
                 </TableHeader>
+
                 <TableBody>
                   {filteredCustomers.slice(0, 12).map((customer) => (
                     <TableRow key={customer._id}>
                       <TableCell>
                         <div>
-                          <p className="font-medium text-gray-900">{customer.name}</p>
-                          <p className="text-sm text-gray-500">{customer.email || 'No email'}</p>
+                          <p className="font-medium text-gray-900">
+                            {customer.name}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {customer.email || 'No email'}
+                          </p>
                         </div>
                       </TableCell>
+
                       <TableCell>
                         <div className="flex items-center gap-2 text-sm text-gray-700">
                           <Phone className="h-4 w-4 text-gray-400" />
                           {customer.whatsappNumber || customer.phone}
                         </div>
                       </TableCell>
+
                       <TableCell>
                         <Badge variant="default">
-                          {(customer.lifecycle?.segment || 'unassigned').replace(/_/g, ' ')}
+                          {(customer.lifecycle?.segment || 'unassigned').replace(
+                            /_/g,
+                            ' '
+                          )}
                         </Badge>
                       </TableCell>
+
                       <TableCell>
                         {formatCurrency(customer.lifecycle?.totalSpent || 0)}
                       </TableCell>
+
                       <TableCell>
                         {customer.lifecycle?.lastPurchaseDate
                           ? formatRelativeTime(customer.lifecycle.lastPurchaseDate)
                           : 'No recent purchase'}
                       </TableCell>
+
                       <TableCell className="text-right">
                         <Button
                           variant="outline"

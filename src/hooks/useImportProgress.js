@@ -53,7 +53,7 @@ export default function useImportProgress({ onFinish, addDebugEvent }) {
       if (payload?.uploadId && payload.uploadId === activeUploadIdRef.current) {
         try {
           const response = await uploadsApi.getStatus(payload.uploadId);
-          const latestStatus = response.data.data;
+          const latestStatus = response?.data;
           onFinish(latestStatus, terminalStatuses.has(latestStatus.status));
         } catch (error) {
           addDebugEvent('Fallback status fetch failed after socket error', {

@@ -1,18 +1,41 @@
-import api from './api';
-import { buildPath } from './resourceApi';
+import { BASE_URL, fetchWrapper } from '../config/apiConfig';
 
-const basePath = '/api/analytics';
+const ANALYTICS_URL = `${BASE_URL}/api/analytics`;
 
 export const analyticsApi = {
-  getDashboard: () => api.get(buildPath(basePath, 'dashboard')),
-  getSegments: () => api.get(buildPath(basePath, 'segments')),
-  getCohorts: (params) => api.get(buildPath(basePath, 'cohorts'), { params }),
-  getChurn: () => api.get(buildPath(basePath, 'churn')),
-  getRevenue: (params) => api.get(buildPath(basePath, 'revenue'), { params }),
-  recalculateScores: () => api.post(buildPath(basePath, 'recalculate')),
+  getDashboard: async () => fetchWrapper(`${ANALYTICS_URL}/dashboard`, { method: 'GET' }),
+
+  getSegments: async () => fetchWrapper(`${ANALYTICS_URL}/segments`, { method: 'GET' }),
+
+  getCohorts: async (params = {}) =>
+    fetchWrapper(`${ANALYTICS_URL}/cohorts`, {
+      method: 'GET',
+      params,
+    }),
+
+  getChurn: async () => fetchWrapper(`${ANALYTICS_URL}/churn`, { method: 'GET' }),
+
+  getRevenue: async (params = {}) =>
+    fetchWrapper(`${ANALYTICS_URL}/revenue`, {
+      method: 'GET',
+      params,
+    }),
+
+  recalculateScores: async () =>
+    fetchWrapper(`${ANALYTICS_URL}/recalculate`, {
+      method: 'POST',
+    }),
 };
 
 export const customDashboardAnalyticsApi = {
-  getFilters: (dashboardId) => api.get(buildPath(basePath, dashboardId, 'filters')),
-  getData: (dashboardId, params) => api.get(buildPath(basePath, dashboardId), { params }),
+  getFilters: async (dashboardId) =>
+    fetchWrapper(`${ANALYTICS_URL}/${dashboardId}/filters`, {
+      method: 'GET',
+    }),
+
+  getData: async (dashboardId, params = {}) =>
+    fetchWrapper(`${ANALYTICS_URL}/${dashboardId}`, {
+      method: 'GET',
+      params,
+    }),
 };

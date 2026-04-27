@@ -53,7 +53,7 @@ export default function Roles() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['role-profiles'],
-    queryFn: () => authApi.getRoles().then((res) => res.data.data),
+    queryFn: () => authApi.getRoles().then((res) => res.data),
   });
 
   const builtInRoles = Array.isArray(data?.builtInRoles) ? data.builtInRoles : [];

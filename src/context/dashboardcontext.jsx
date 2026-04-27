@@ -3,6 +3,26 @@ import { formatApiError } from '../services/api';
 import { dashboardsApi } from '../services/dashboards';
 import { DashboardContext } from './dashboardContextValue';
 
+const extractDashboardList = (response) => {
+  if (Array.isArray(response)) return response;
+  if (Array.isArray(response?.data)) return response.data;
+  if (Array.isArray(response?.dashboards)) return response.dashboards;
+  return [];
+};
+
+const extractDashboard = (response) => {
+  if (!response || typeof response !== 'object') return null;
+
+  if (response._id) return response;
+  if (response.data && typeof response.data === 'object') return response.data;
+  if (response.dashboard && typeof response.dashboard === 'object') return response.dashboard;
+
+  return null;
+};
+
+const sanitizeDashboards = (items) =>
+  (Array.isArray(items) ? items : []).filter((item) => item && typeof item === 'object' && item._id);
+
 export const DashboardProvider = ({ children }) => {
   const [dashboards, setDashboards] = useState([]);
   const [currentDashboard, setCurrentDashboard] = useState(null);
@@ -12,7 +32,8 @@ export const DashboardProvider = ({ children }) => {
   const fetchDashboards = async () => {
     setLoading(true);
     try {
-      const { data } = await dashboardsApi.getAll();
+      const response = await dashboardsApi.getAll();
+      const data = sanitizeDashboards(extractDashboardList(response));
       setDashboards(data);
       setError(null);
     } catch (err) {
@@ -25,7 +46,8 @@ export const DashboardProvider = ({ children }) => {
   const fetchDashboard = async (id) => {
     setLoading(true);
     try {
-      const { data } = await dashboardsApi.getById(id);
+      const response = await dashboardsApi.getById(id);
+      const data = extractDashboard(response);
       setCurrentDashboard(data);
       setError(null);
       return data;
@@ -39,8 +61,9 @@ export const DashboardProvider = ({ children }) => {
   
   const createDashboard = async (dashboardData) => {
     try {
-      const { data } = await dashboardsApi.create(dashboardData);
-      setDashboards(prev => [data, ...prev]);
+      const response = await dashboardsApi.create(dashboardData);
+      const data = extractDashboard(response);
+      setDashboards((prev) => (data?._id ? [data, ...sanitizeDashboards(prev)] : sanitizeDashboards(prev)));
       setError(null);
       return data;
     } catch (err) {
@@ -52,8 +75,9 @@ export const DashboardProvider = ({ children }) => {
   
   const updateDashboard = async (id, updates) => {
     try {
-      const { data } = await dashboardsApi.update(id, updates);
-      setDashboards(prev => prev.map(d => d._id === id ? data : d));
+      const response = await dashboardsApi.update(id, updates);
+      const data = extractDashboard(response);
+      setDashboards((prev) => sanitizeDashboards(prev).map((d) => (d._id === id && data?._id ? data : d)));
       setCurrentDashboard(data);
       setError(null);
       return data;
@@ -67,7 +91,7 @@ export const DashboardProvider = ({ children }) => {
   const deleteDashboard = async (id) => {
     try {
       await dashboardsApi.delete(id);
-      setDashboards(prev => prev.filter(d => d._id !== id));
+      setDashboards((prev) => sanitizeDashboards(prev).filter((d) => d._id !== id));
       setError(null);
     } catch (err) {
       const errorMsg = formatApiError(err);

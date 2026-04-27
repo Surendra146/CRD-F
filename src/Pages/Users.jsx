@@ -30,12 +30,12 @@ export default function Users() {
 
   const { data: rolesData } = useQuery({
     queryKey: ['role-profiles'],
-    queryFn: () => authApi.getRoles().then((res) => res.data.data),
+    queryFn: () => authApi.getRoles().then((res) => res.data),
   });
 
   const { data: membersData, isLoading: isMembersLoading } = useQuery({
     queryKey: ['tenant-members'],
-    queryFn: () => authApi.getMembers().then((res) => res.data),
+    queryFn: () => authApi.getMembers(),
   });
 
   const roleProfiles = useMemo(() => {

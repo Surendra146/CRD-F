@@ -27,7 +27,7 @@ import { hasRoleAccess } from '../../utils/rbac.js';
 import { formatDate, formatNumber } from '../../utils/format.js';
 
 function normalizeCollection(payload) {
-  return payload?.data?.data || payload?.data?.items || payload?.data || payload || [];
+  return payload?.data || payload?.items || payload || [];
 }
 
 function normalizeOptionLabel(value) {
@@ -126,17 +126,17 @@ export default function Campaigns() {
 
   const campaignsQuery = useQuery({
     queryKey: ['campaigns'],
-    queryFn: () => campaignsApi.getAll().then(normalizeCollection),
+    queryFn: () => campaignsApi.getAll(),
   });
 
   const templatesQuery = useQuery({
     queryKey: ['templates'],
-    queryFn: () => templatesApi.getAll().then(normalizeCollection),
+    queryFn: () => templatesApi.getAll(),
   });
 
   const segmentsQuery = useQuery({
     queryKey: ['segments'],
-    queryFn: () => segmentsApi.getAll().then(normalizeCollection),
+    queryFn: () => segmentsApi.getAll(),
   });
 
   const campaigns = Array.isArray(campaignsQuery.data) ? campaignsQuery.data : [];

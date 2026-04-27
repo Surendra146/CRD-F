@@ -9,10 +9,9 @@ import Button from '../../components/UI/button.jsx';
 import Input from '../../components/UI/input.jsx';
 import Select from '../../components/UI/select.jsx';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/UI/card.jsx';
-import { customersApi } from '../../services/customers';
+import { customersApi } from '../../services/customers.js';
 
 const initialForm = {
-  externalId: '',
   name: '',
   email: '',
   phone: '',
@@ -21,7 +20,6 @@ const initialForm = {
   customerCreatedDate: '',
   age: '',
   gender: '',
-  locationCode: '',
   locationName: '',
   posNo: '',
   city: '',
@@ -60,7 +58,6 @@ export default function CustomerCreate() {
       if (!customer) return;
 
       setForm({
-        externalId: customer.externalId || '',
         name: customer.name || '',
         email: customer.email || '',
         phone: customer.phone || '',
@@ -72,7 +69,6 @@ export default function CustomerCreate() {
             ? String(customer.demographics.age)
             : '',
         gender: customer.demographics?.gender || '',
-        locationCode: customer.demographics?.location?.locationCode || '',
         locationName: customer.demographics?.location?.locationName || '',
         posNo: customer.demographics?.location?.posNo || '',
         city: customer.demographics?.location?.city || '',
@@ -105,10 +101,8 @@ export default function CustomerCreate() {
 
   const validateForm = () => {
     const requiredFields = [
-      { key: 'externalId', label: 'Customer Code' },
       { key: 'name', label: 'Customer Name' },
       { key: 'locationName', label: 'Location Name' },
-      { key: 'locationCode', label: 'Location Code' },
       { key: 'phone', label: 'Phone Number' },
       { key: 'address', label: 'Address' },
       { key: 'country', label: 'Country' },
@@ -136,11 +130,14 @@ export default function CustomerCreate() {
       return;
     }
 
+    const normalizedPhone = form.phone.trim();
+    const normalizedLocationName = form.locationName.trim();
+
     const payload = {
-      externalId: form.externalId.trim(),
+      externalId: normalizedPhone,
       name: form.name.trim(),
       email: form.email || undefined,
-      phone: form.phone.trim(),
+      phone: normalizedPhone,
       whatsappNumber: form.whatsappNumber || undefined,
       address: form.address.trim(),
       customerCreatedDate: form.customerCreatedDate
@@ -150,8 +147,8 @@ export default function CustomerCreate() {
         age: form.age ? Number(form.age) : undefined,
         gender: form.gender || undefined,
         location: {
-          locationCode: form.locationCode.trim(),
-          locationName: form.locationName.trim(),
+          locationCode: normalizedLocationName,
+          locationName: normalizedLocationName,
           posNo: form.posNo || undefined,
           city: form.city || undefined,
           state: form.state.trim(),
@@ -193,12 +190,6 @@ export default function CustomerCreate() {
                 </h3>
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <Input
-                    label="Customer Code *"
-                    value={form.externalId}
-                    onChange={(e) => handleChange('externalId', e.target.value)}
-                  />
-
                   <Input
                     label="Customer Name *"
                     value={form.name}
@@ -246,12 +237,6 @@ export default function CustomerCreate() {
                 </h3>
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                  <Input
-                    label="Location Code *"
-                    value={form.locationCode}
-                    onChange={(e) => handleChange('locationCode', e.target.value)}
-                  />
-
                   <Input
                     label="Location Name *"
                     value={form.locationName}

@@ -1,29 +1,59 @@
-import api from './api';
-import { buildPath } from './resourceApi';
+import { BASE_URL, fetchWrapper } from '../config/apiConfig';
 
-const basePath = '/api/uploads';
+const UPLOADS_URL = `${BASE_URL}/api/uploads`;
 
 export const uploadsApi = {
-  upload: (file, type) => {
+  upload: async (file, type) => {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('type', type);
 
-    return api.post(basePath, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+    return fetchWrapper(UPLOADS_URL, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
     });
   },
 
-  suggestMappings: (columns, type) => api.post(buildPath(basePath, 'suggest-mappings'), { columns, type }),
+  suggestMappings: async (columns, type) => {
+    return fetchWrapper(`${UPLOADS_URL}/suggest-mappings`, {
+      method: 'POST',
+      body: JSON.stringify({ columns, type }),
+    });
+  },
 
-  getTargetFields: (type) => api.get(buildPath(basePath, 'target-fields'), { params: { type } }),
+  getTargetFields: async (type) => {
+    return fetchWrapper(`${UPLOADS_URL}/target-fields`, {
+      method: 'GET',
+      params: { type },
+    });
+  },
 
-  setMapping: (uploadId, columnMapping) =>
-    api.put(buildPath(basePath, uploadId, 'mapping'), { columnMapping }),
+  setMapping: async (uploadId, columnMapping) => {
+    return fetchWrapper(`${UPLOADS_URL}/${uploadId}/mapping`, {
+      method: 'PUT',
+      body: JSON.stringify({ columnMapping }),
+    });
+  },
 
-  process: (uploadId) => api.post(buildPath(basePath, uploadId, 'process')),
+  process: async (uploadId) => {
+    return fetchWrapper(`${UPLOADS_URL}/${uploadId}/process`, {
+      method: 'POST',
+    });
+  },
 
-  getStatus: (uploadId) => api.get(buildPath(basePath, uploadId, 'status')),
+  getStatus: async (uploadId) => {
+    return fetchWrapper(`${UPLOADS_URL}/${uploadId}/status`, {
+      method: 'GET',
+    });
+  },
 
-  getHistory: (params) => api.get(buildPath(basePath, 'history'), { params }),
+  getHistory: async (params = {}) => {
+    return fetchWrapper(`${UPLOADS_URL}/history`, {
+      method: 'GET',
+      params,
+    });
+  },
 };

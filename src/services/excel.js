@@ -1,24 +1,74 @@
-import api from './api';
-import { buildPath } from './resourceApi';
+import { BASE_URL, fetchWrapper } from '../config/apiConfig';
 
-const basePath = '/api/excel';
+const EXCEL_URL = `${BASE_URL}/api/excel`;
 
 export const excelApi = {
-  upload: ({ file, dashboardId, sourceName, headerRow }) => {
+  /* =========================
+     FILE UPLOAD (IMPORTANT)
+  ========================= */
+  upload: async ({ file, dashboardId, sourceName, headerRow }) => {
     const formData = new FormData();
+
     formData.append('file', file);
     formData.append('dashboardId', dashboardId);
     formData.append('sourceName', sourceName);
     formData.append('headerRow', headerRow);
 
-    return api.post(buildPath(basePath, 'upload'), formData);
+    return fetchWrapper(`${EXCEL_URL}/upload`, {
+      method: 'POST',
+      body: formData, // ✅ DO NOT stringify
+      headers: {
+        'Content-Type': 'multipart/form-data', // axios handles boundary
+      },
+    });
   },
 
-  getByDashboardId: (dashboardId) => api.get(buildPath(basePath, dashboardId)),
+  /* =========================
+     GET DATA
+  ========================= */
+  getByDashboardId: async (dashboardId) => {
+    return fetchWrapper(`${EXCEL_URL}/${dashboardId}`, {
+      method: 'GET',
+    });
+  },
 
-  mapColumns: (excelDataId, columnMapping) =>
-    api.post(buildPath(basePath, 'map-columns'), {
-      excelDataId,
-      columnMapping,
-    }),
+  /* =========================
+     MAP COLUMNS
+  ========================= */
+  mapColumns: async (excelDataId, columnMapping) => {
+    return fetchWrapper(`${EXCEL_URL}/map-columns`, {
+      method: 'POST',
+      body: JSON.stringify({
+        excelDataId,
+        columnMapping,
+      }),
+    });
+  },
+
+  /* =========================
+     PROCESS UPLOAD (IMPORTANT for your flow)
+  ========================= */
+  processUpload: async (uploadId) => {
+    return fetchWrapper(`${EXCEL_URL}/${uploadId}/process`, {
+      method: 'POST',
+    });
+  },
+
+  /* =========================
+     STATUS (REAL-TIME POLLING)
+  ========================= */
+  getStatus: async (uploadId) => {
+    return fetchWrapper(`${EXCEL_URL}/${uploadId}/status`, {
+      method: 'GET',
+    });
+  },
+
+  /* =========================
+     HISTORY
+  ========================= */
+  getHistory: async () => {
+    return fetchWrapper(`${EXCEL_URL}/history`, {
+      method: 'GET',
+    });
+  },
 };

@@ -1,5 +1,12 @@
-import api from '../config/api';
+import { BASE_URL, fetchWrapper } from '../config/apiConfig';
+
+const NOTIFICATIONS_URL = `${BASE_URL}/api/notifications`;
 
 export const notificationsApi = {
-  getAll: () => api.get('/api/notifications'),
+  getAll: async (params = {}) => {
+    return fetchWrapper(NOTIFICATIONS_URL, {
+      method: 'GET',
+      params,
+    });
+  },
 };
