@@ -15,11 +15,11 @@ const initialForm = {
   name: '',
   email: '',
   phone: '',
-  whatsappNumber: '',
   address: '',
   customerCreatedDate: '',
   age: '',
   gender: '',
+  customerType: '',
   locationName: '',
   posNo: '',
   city: '',
@@ -61,7 +61,6 @@ export default function CustomerCreate() {
         name: customer.name || '',
         email: customer.email || '',
         phone: customer.phone || '',
-        whatsappNumber: customer.whatsappNumber || '',
         address: customer.address || '',
         customerCreatedDate: formatDateInputValue(customer.customerCreatedDate),
         age:
@@ -69,6 +68,7 @@ export default function CustomerCreate() {
             ? String(customer.demographics.age)
             : '',
         gender: customer.demographics?.gender || '',
+        customerType: customer.demographics?.customerType || '',
         locationName: customer.demographics?.location?.locationName || '',
         posNo: customer.demographics?.location?.posNo || '',
         city: customer.demographics?.location?.city || '',
@@ -107,7 +107,6 @@ export default function CustomerCreate() {
       { key: 'address', label: 'Address' },
       { key: 'country', label: 'Country' },
       { key: 'state', label: 'State' },
-      { key: 'postalCode', label: 'Postal Code' },
       { key: 'customerCreatedDate', label: 'Customer Created Date' },
     ];
 
@@ -138,7 +137,6 @@ export default function CustomerCreate() {
       name: form.name.trim(),
       email: form.email || undefined,
       phone: normalizedPhone,
-      whatsappNumber: form.whatsappNumber || undefined,
       address: form.address.trim(),
       customerCreatedDate: form.customerCreatedDate
         ? new Date(form.customerCreatedDate)
@@ -146,6 +144,7 @@ export default function CustomerCreate() {
       demographics: {
         age: form.age ? Number(form.age) : undefined,
         gender: form.gender || undefined,
+        customerType: form.customerType || undefined,
         location: {
           locationCode: normalizedLocationName,
           locationName: normalizedLocationName,
@@ -209,12 +208,6 @@ export default function CustomerCreate() {
                   />
 
                   <Input
-                    label="WhatsApp Number"
-                    value={form.whatsappNumber}
-                    onChange={(e) => handleChange('whatsappNumber', e.target.value)}
-                  />
-
-                  <Input
                     label="Customer Created Date *"
                     type="date"
                     value={form.customerCreatedDate}
@@ -268,7 +261,7 @@ export default function CustomerCreate() {
                   />
 
                   <Input
-                    label="Postal Code *"
+                    label="Postal Code"
                     value={form.postalCode}
                     onChange={(e) => handleChange('postalCode', e.target.value)}
                   />
@@ -297,6 +290,17 @@ export default function CustomerCreate() {
                       { label: 'Male', value: 'male' },
                       { label: 'Female', value: 'female' },
                       { label: 'Other', value: 'other' },
+                    ]}
+                  />
+
+                  <Select
+                    label="Customer Type"
+                    value={form.customerType}
+                    onChange={(e) => handleChange('customerType', e.target.value)}
+                    options={[
+                      { label: 'Select', value: '' },
+                      { label: 'Credit', value: 'credit' },
+                      { label: 'Loyalty', value: 'loyalty' },
                     ]}
                   />
                 </div>

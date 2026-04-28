@@ -135,7 +135,7 @@ export default function WhatsApp() {
   const reachableCustomers = useMemo(
     () =>
       customers.filter((customer) =>
-        cleanPhoneNumber(customer.whatsappNumber || customer.phone)
+        cleanPhoneNumber(customer.phone)
       ),
     [customers]
   );
@@ -157,7 +157,7 @@ export default function WhatsApp() {
 
   const customerOptions = filteredCustomers.map((customer) => ({
     value: customer._id,
-    label: `${customer.name} - ${customer.whatsappNumber || customer.phone}`,
+    label: `${customer.name} - ${customer.phone}`,
   }));
 
   const sendWhatsAppMutation = useMutation({
@@ -165,7 +165,7 @@ export default function WhatsApp() {
       communicationsApi.sendWhatsApp({
         customerId: customer._id,
         name: customer.name,
-        phone: cleanPhoneNumber(customer.whatsappNumber || customer.phone),
+        phone: cleanPhoneNumber(customer.phone),
         provider: whatsappProvider,
         graphVersion: whatsappGraphVersion,
         phoneNumberId: whatsappPhoneNumberId || undefined,
@@ -184,9 +184,7 @@ export default function WhatsApp() {
 
       setLastDelivery({
         customerName: variables.customer.name,
-        phone: cleanPhoneNumber(
-          variables.customer.whatsappNumber || variables.customer.phone
-        ),
+        phone: cleanPhoneNumber(variables.customer.phone),
         mode: 'api',
         message: variables.outgoingMessage,
         deliveryMode:
@@ -204,7 +202,7 @@ export default function WhatsApp() {
 
       if (variables?.allowFallback) {
         const fallbackLink = buildWhatsAppLink(
-          variables.customer.whatsappNumber || variables.customer.phone,
+          variables.customer.phone,
           variables.outgoingMessage
         );
 
@@ -230,7 +228,7 @@ export default function WhatsApp() {
       return;
     }
 
-    const customerPhone = customer.whatsappNumber || customer.phone;
+    const customerPhone = customer.phone;
 
     if (!cleanPhoneNumber(customerPhone)) {
       toast.error('This customer does not have a valid phone number');
@@ -261,7 +259,7 @@ export default function WhatsApp() {
       return;
     }
 
-    const customerPhone = customer.whatsappNumber || customer.phone;
+    const customerPhone = customer.phone;
 
     if (!cleanPhoneNumber(customerPhone)) {
       toast.error('This customer does not have a valid phone number');
@@ -429,7 +427,7 @@ export default function WhatsApp() {
                     </Badge>
 
                     <span className="text-sm text-gray-500">
-                      {selectedCustomer.whatsappNumber || selectedCustomer.phone}
+                      {selectedCustomer.phone}
                     </span>
                   </div>
 
@@ -615,7 +613,7 @@ export default function WhatsApp() {
                       <TableCell>
                         <div className="flex items-center gap-2 text-sm text-gray-700">
                           <Phone className="h-4 w-4 text-gray-400" />
-                          {customer.whatsappNumber || customer.phone}
+                          {customer.phone}
                         </div>
                       </TableCell>
 

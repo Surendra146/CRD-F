@@ -21,12 +21,12 @@ import { uploadsApi } from '../../services/uploads';
 const mandatoryFieldsByImportType = {
   customer_details: [
     { value: 'name', label: 'Customer Name' },
+    { value: 'demographics.customerType', label: 'Customer Type' },
     { value: 'demographics.location.locationName', label: 'Location Name' },
     { value: 'phone', label: 'Phone Number' },
     { value: 'address', label: 'Address' },
     { value: 'demographics.location.country', label: 'Country' },
     { value: 'demographics.location.state', label: 'State' },
-    { value: 'demographics.location.postalCode', label: 'Postal Code' },
     { value: 'customerCreatedDate', label: 'Customer Created Date' },
   ],
 
@@ -39,6 +39,41 @@ const mandatoryFieldsByImportType = {
     { value: '_purchasePrice', label: 'Unit Price' },
     { value: '_purchaseDate', label: 'Purchase Date' },
   ],
+};
+
+const hiddenTargetFieldsByImportType = {
+  customer_details: new Set([
+    'externalId',
+    'demographics.location.locationCode',
+    'demographics.location.posNo',
+    'whatsappNumber',
+    '_billType',
+  ]),
+  customer_sales: new Set([
+    'externalId',
+    'demographics.location.locationCode',
+    'whatsappNumber',
+    'demographics.customerType',
+  ]),
+};
+
+const additionalTargetFieldsByImportType = {
+  customer_details: [{ value: 'demographics.customerType', label: 'Customer Type' }],
+  customer_sales: [{ value: '_billType', label: 'Bill Type' }],
+};
+
+const ensureTargetFieldOptions = (options, importType) => {
+  const baseOptions = Array.isArray(options) ? options : [];
+  const additionalOptions = additionalTargetFieldsByImportType[importType] || [];
+  const optionMap = new Map(baseOptions.map((option) => [option.value, option]));
+
+  additionalOptions.forEach((option) => {
+    if (!optionMap.has(option.value)) {
+      optionMap.set(option.value, option);
+    }
+  });
+
+  return Array.from(optionMap.values());
 };
 
 const getValidColumnMappings = (mappings) =>
@@ -66,8 +101,6 @@ const getMissingMandatoryFields = (mappings, importType) => {
     (field) => !selectedTargetFields.has(field.value)
   );
 };
-
-const derivedTargetFieldSet = new Set(['externalId', 'demographics.location.locationCode']);
 
 const withDerivedCodeMappings = (mappings) => {
   const validMappings = getValidColumnMappings(mappings);
@@ -105,8 +138,9 @@ export default function Import() {
   const [targetFieldOptions, setTargetFieldOptions] = useState(targetFieldOptionsFallback);
 
   const targetFieldOptionsWithMandatoryMarks = useMemo(() => {
-    const visibleTargetOptions = targetFieldOptions.filter(
-      (option) => !derivedTargetFieldSet.has(option.value)
+    const hiddenTargetFieldSet = hiddenTargetFieldsByImportType[importType] || new Set();
+    const visibleTargetOptions = ensureTargetFieldOptions(targetFieldOptions, importType).filter(
+      (option) => !hiddenTargetFieldSet.has(option.value)
     );
     const mandatoryValues = new Set(
       (mandatoryFieldsByImportType[importType] || []).map((field) => field.value)
@@ -177,11 +211,12 @@ export default function Import() {
 
         const suggestions = Array.isArray(suggestionsRes?.data) ? suggestionsRes.data : [];
 
-        setTargetFieldOptions(
+        const incomingOptions =
           Array.isArray(fieldsRes?.data) && fieldsRes.data.length
             ? fieldsRes.data
-            : targetFieldOptionsFallback
-        );
+            : targetFieldOptionsFallback;
+
+        setTargetFieldOptions(ensureTargetFieldOptions(incomingOptions, importType));
 
         addDebugEvent('Suggested mappings loaded', {
           uploadId: uploadedData.uploadId,
@@ -191,10 +226,11 @@ export default function Import() {
         const mapping = uploadedData.columns.map((col) => {
           const suggestion = suggestions.find((item) => item.sourceColumn === col);
           const suggestedTarget = suggestion?.targetField || '';
+          const hiddenTargetFieldSet = hiddenTargetFieldsByImportType[importType] || new Set();
 
           return {
             sourceColumn: col,
-            targetField: derivedTargetFieldSet.has(suggestedTarget) ? '' : suggestedTarget,
+            targetField: hiddenTargetFieldSet.has(suggestedTarget) ? '' : suggestedTarget,
             transformation: 'none',
           };
         });

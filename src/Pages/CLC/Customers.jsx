@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ChevronLeft,
@@ -54,12 +54,13 @@ const segmentOptions = [
   { value: 'lost', label: 'Lost' },
 ];
 
-export default function Customers() {
+export default function Customers({ moduleType = 'customer_details' }) {
   const queryClient = useQueryClient();
 
   const [filters, setFilters] = useState({
     page: 1,
     limit: 20,
+    moduleType,
     search: '',
     status: '',
     segment: '',
@@ -67,10 +68,16 @@ export default function Customers() {
     sortOrder: 'desc',
   });
 
+  const isSalesModule = moduleType === 'customer_sales';
+
   const [showFilters, setShowFilters] = useState(false);
   const [activeMenuId, setActiveMenuId] = useState(null);
   const [commentCustomer, setCommentCustomer] = useState(null);
   const [commentText, setCommentText] = useState('');
+
+  useEffect(() => {
+    setFilters((prev) => ({ ...prev, page: 1, moduleType }));
+  }, [moduleType]);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['customers', filters],
@@ -102,6 +109,13 @@ export default function Customers() {
   });
 
   const customerRows = useMemo(() => data?.data || [], [data?.data]);
+  const getLatestPurchase = (customer) => {
+    const purchases = Array.isArray(customer?.purchases) ? customer.purchases : [];
+    if (!purchases.length) return null;
+
+    return [...purchases]
+      .sort((a, b) => new Date(b?.date || 0) - new Date(a?.date || 0))[0];
+  };
 
   const handleSearch = (e) => {
     setFilters({ ...filters, search: e.target.value, page: 1 });
@@ -145,15 +159,17 @@ export default function Customers() {
   return (
     <div>
       <Header
-        title="Customers"
-        subtitle={`${data?.pagination?.total || 0} total customers`}
+        title={isSalesModule ? 'Customer Sales Module' : 'Customer Detail Module'}
+        subtitle={`${data?.pagination?.total || 0} total records`}
         actions={
-          <Link to="/customers/new">
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Customer
-            </Button>
-          </Link>
+          !isSalesModule ? (
+            <Link to="/customers/new">
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Customer
+              </Button>
+            </Link>
+          ) : null
         }
       />
 
@@ -165,7 +181,11 @@ export default function Customers() {
                 <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="Search by name, phone, location..."
+                  placeholder={
+                    isSalesModule
+                      ? 'Search by customer, phone, location, order, POS...'
+                      : 'Search by name, phone, location...'
+                  }
                   value={filters.search}
                   onChange={handleSearch}
                   className="w-full rounded-lg border border-gray-300 py-2 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-primary-500"
@@ -222,15 +242,21 @@ export default function Customers() {
             <EmptyState
               icon={Users}
               title="No customers found"
-              description="Get started by adding your first customer or importing data"
+              description={
+                isSalesModule
+                  ? 'Import customer sales data to view sales records'
+                  : 'Get started by adding your first customer or importing data'
+              }
               action={
                 <div className="flex gap-3">
-                  <Link to="/customers/new">
-                    <Button>
-                      <Plus className="mr-2 h-4 w-4" />
-                      Add Customer
-                    </Button>
-                  </Link>
+                  {!isSalesModule ? (
+                    <Link to="/customers/new">
+                      <Button>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Add Customer
+                      </Button>
+                    </Link>
+                  ) : null}
 
                   <Link to="/import">
                     <Button variant="outline">Import Data</Button>
@@ -245,16 +271,30 @@ export default function Customers() {
                   <TableRow>
                     <TableHead>Customer</TableHead>
                     <TableHead>Location</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Total Spent</TableHead>
-                    <TableHead>Orders</TableHead>
-                    <TableHead>Last Purchase</TableHead>
+                    {isSalesModule ? (
+                      <>
+                        <TableHead>Order ID</TableHead>
+                        <TableHead>POS No</TableHead>
+                        <TableHead>Unit Price</TableHead>
+                        <TableHead>Sales Details</TableHead>
+                      </>
+                    ) : (
+                      <>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Total Spent</TableHead>
+                        <TableHead>Orders</TableHead>
+                        <TableHead>Last Purchase</TableHead>
+                      </>
+                    )}
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
 
                 <TableBody>
-                  {customerRows.map((customer) => (
+                  {customerRows.map((customer) => {
+                    const latestPurchase = getLatestPurchase(customer);
+
+                    return (
                     <TableRow key={customer._id}>
                       <TableCell>
                         <div>
@@ -269,6 +309,10 @@ export default function Customers() {
                             {customer.phone || customer.email || 'No contact'}
                           </p>
 
+                          <p className="text-xs text-gray-500">
+                            Type: {customer.demographics?.customerType || '-'}
+                          </p>
+
                           {customer.address ? (
                             <p className="text-xs text-gray-400">{customer.address}</p>
                           ) : null}
@@ -278,7 +322,7 @@ export default function Customers() {
                       <TableCell>
                         <div>
                           <p className="text-sm font-medium text-gray-700">
-                            {customer.demographics?.location?.locationName || '-'}
+                            {latestPurchase?.locationName || customer.demographics?.location?.locationName || '-'}
                           </p>
 
                           <p className="text-xs text-gray-400">
@@ -293,41 +337,63 @@ export default function Customers() {
                         </div>
                       </TableCell>
 
-                      <TableCell>
-                        <Badge
-                          variant={
-                            customer.lifecycle?.status === 'active'
-                              ? 'success'
-                              : customer.lifecycle?.status === 'at_risk'
-                                ? 'warning'
-                                : customer.lifecycle?.status === 'churned'
-                                  ? 'danger'
-                                  : customer.lifecycle?.status === 'loyal'
-                                    ? 'info'
-                                    : 'default'
-                          }
-                        >
-                          {customer.lifecycle?.status?.replace(/_/g, ' ') || 'Unknown'}
-                        </Badge>
-                      </TableCell>
+                      {isSalesModule ? (
+                        <>
+                          <TableCell>{latestPurchase?.orderId || '-'}</TableCell>
+                          <TableCell>{latestPurchase?.posNo || '-'}</TableCell>
+                          <TableCell>
+                            {formatCurrency(latestPurchase?.items?.[0]?.price || 0)}
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-sm text-gray-600">
+                              <p>{formatCurrency(latestPurchase?.amount || 0)}</p>
+                              <p className="text-xs text-gray-500">
+                                {latestPurchase?.date
+                                  ? formatRelativeTime(latestPurchase.date)
+                                  : 'No sale date'}
+                              </p>
+                            </div>
+                          </TableCell>
+                        </>
+                      ) : (
+                        <>
+                          <TableCell>
+                            <Badge
+                              variant={
+                                customer.lifecycle?.status === 'active'
+                                  ? 'success'
+                                  : customer.lifecycle?.status === 'at_risk'
+                                    ? 'warning'
+                                    : customer.lifecycle?.status === 'churned'
+                                      ? 'danger'
+                                      : customer.lifecycle?.status === 'loyal'
+                                        ? 'info'
+                                        : 'default'
+                              }
+                            >
+                              {customer.lifecycle?.status?.replace(/_/g, ' ') || 'Unknown'}
+                            </Badge>
+                          </TableCell>
 
-                      <TableCell>
-                        <span className="font-medium">
-                          {formatCurrency(customer.lifecycle?.totalSpent || 0)}
-                        </span>
-                      </TableCell>
+                          <TableCell>
+                            <span className="font-medium">
+                              {formatCurrency(customer.lifecycle?.totalSpent || 0)}
+                            </span>
+                          </TableCell>
 
-                      <TableCell>{customer.lifecycle?.totalPurchases || 0}</TableCell>
+                          <TableCell>{customer.lifecycle?.totalPurchases || 0}</TableCell>
 
-                      <TableCell>
-                        {customer.lifecycle?.lastPurchaseDate ? (
-                          <span className="text-sm text-gray-500">
-                            {formatRelativeTime(customer.lifecycle.lastPurchaseDate)}
-                          </span>
-                        ) : (
-                          <span className="text-sm text-gray-400">Never</span>
-                        )}
-                      </TableCell>
+                          <TableCell>
+                            {customer.lifecycle?.lastPurchaseDate ? (
+                              <span className="text-sm text-gray-500">
+                                {formatRelativeTime(customer.lifecycle.lastPurchaseDate)}
+                              </span>
+                            ) : (
+                              <span className="text-sm text-gray-400">Never</span>
+                            )}
+                          </TableCell>
+                        </>
+                      )}
 
                       <TableCell>
                         <div className="relative flex items-center justify-end gap-2">
@@ -388,7 +454,7 @@ export default function Customers() {
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))}
+                  )})}
                 </TableBody>
               </Table>
 

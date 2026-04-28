@@ -7,7 +7,8 @@ import { ModuleRoute, ProtectedRoute, PublicRoute, RoleRoute } from './RouteGuar
 const Login = lazy(() => import('../Pages/Login'));
 const Register = lazy(() => import('../Pages/Register'));
 const Dashboard = lazy(() => import('../Pages/CLC/Dashboard'));
-const Customers = lazy(() => import('../Pages/CLC/Customers'));
+const CustomerDetails = lazy(() => import('../Pages/CLC/CustomerDetails'));
+const CustomerSales = lazy(() => import('../Pages/CLC/CustomerSales'));
 const CustomerCreate = lazy(() => import('../Pages/CLC/CustomerCreate'));
 const CustomerDetail = lazy(() => import('../Pages/CLC/CustomerDetail'));
 const Analytics = lazy(() => import('../Pages/CLC/Analytics'));
@@ -79,10 +80,24 @@ export default function AppRoutes() {
         />
         <Route
           path="/customers"
+          element={<Navigate to="/customers/details" replace />}
+        />
+        <Route
+          path="/customers/details"
           element={
             <PageLoader>
               <ModuleRoute moduleKey="customers">
-                <Customers />
+                <CustomerDetails />
+              </ModuleRoute>
+            </PageLoader>
+          }
+        />
+        <Route
+          path="/customers/sales"
+          element={
+            <PageLoader>
+              <ModuleRoute moduleKey="customers">
+                <CustomerSales />
               </ModuleRoute>
             </PageLoader>
           }

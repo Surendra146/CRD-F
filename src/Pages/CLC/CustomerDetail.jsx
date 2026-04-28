@@ -181,7 +181,7 @@ export default function CustomerDetail() {
               </div>
               <div className="flex items-center gap-3 rounded-lg border border-gray-200 px-4 py-3">
                 <Phone className="h-4 w-4 text-gray-400" />
-                <span className="text-sm text-gray-700">{customer.phone || customer.whatsappNumber || 'No phone'}</span>
+                <span className="text-sm text-gray-700">{customer.phone || 'No phone'}</span>
               </div>
               <div className="flex items-center gap-3 rounded-lg border border-gray-200 px-4 py-3 sm:col-span-2">
                 <MapPin className="h-4 w-4 text-gray-400" />
@@ -222,6 +222,10 @@ export default function CustomerDetail() {
               <div>
                 <p className="text-xs uppercase tracking-wide text-gray-400">Gender</p>
                 <p className="mt-1 text-sm text-gray-800">{demographics.gender || 'Not provided'}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-gray-400">Customer Type</p>
+                <p className="mt-1 text-sm text-gray-800">{demographics.customerType || 'Not provided'}</p>
               </div>
               <div>
                 <p className="text-xs uppercase tracking-wide text-gray-400">Average Order Value</p>

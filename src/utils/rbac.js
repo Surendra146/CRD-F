@@ -16,9 +16,10 @@ export function hasRoleAccess(userRole, allowedRoles = []) {
 
 export function canAccessModule(user, module) {
   const assignedModules = Array.isArray(user?.allowedModules) ? user.allowedModules : [];
+  const accessKey = module?.accessKey || module?.key;
 
   if (assignedModules.length) {
-    return assignedModules.includes(module?.key);
+    return assignedModules.includes(accessKey);
   }
 
   if (!module?.roles?.length) {
