@@ -1,59 +1,98 @@
-import { BASE_URL, fetchWrapper } from '../config/apiConfig';
+import { apiWrapper } from '../config/apiConfig';
 
-const UPLOADS_URL = `${BASE_URL}/api/uploads`;
+const UPLOADS_URL = '/api/uploads';
 
 export const uploadsApi = {
   upload: async (file, type) => {
+    if (!file) {
+      throw new Error('Please select a file before uploading');
+    }
+
     const formData = new FormData();
     formData.append('file', file);
     formData.append('type', type);
 
-    return fetchWrapper(UPLOADS_URL, {
+    return apiWrapper({
+      url: UPLOADS_URL,
       method: 'POST',
-      body: formData,
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
+      data: formData,
     });
   },
 
   suggestMappings: async (columns, type) => {
-    return fetchWrapper(`${UPLOADS_URL}/suggest-mappings`, {
+    return apiWrapper({
+      url: `${UPLOADS_URL}/suggest-mappings`,
       method: 'POST',
-      body: JSON.stringify({ columns, type }),
+      data: { columns, type },
     });
   },
 
   getTargetFields: async (type) => {
-    return fetchWrapper(`${UPLOADS_URL}/target-fields`, {
+    return apiWrapper({
+      url: `${UPLOADS_URL}/target-fields`,
       method: 'GET',
       params: { type },
     });
   },
 
   setMapping: async (uploadId, columnMapping) => {
-    return fetchWrapper(`${UPLOADS_URL}/${uploadId}/mapping`, {
+    return apiWrapper({
+      url: `${UPLOADS_URL}/${uploadId}/mapping`,
       method: 'PUT',
-      body: JSON.stringify({ columnMapping }),
+      data: { columnMapping },
     });
   },
 
   process: async (uploadId) => {
-    return fetchWrapper(`${UPLOADS_URL}/${uploadId}/process`, {
+    return apiWrapper({
+      url: `${UPLOADS_URL}/${uploadId}/process`,
       method: 'POST',
     });
   },
 
+  confirmSave: async (uploadId) => {
+    return apiWrapper({
+      url: `${UPLOADS_URL}/${uploadId}/confirm-save`,
+      method: 'POST',
+      data: { confirmSave: true },
+    });
+  },
+
   getStatus: async (uploadId) => {
-    return fetchWrapper(`${UPLOADS_URL}/${uploadId}/status`, {
+    return apiWrapper({
+      url: `${UPLOADS_URL}/${uploadId}/status`,
       method: 'GET',
     });
   },
 
   getHistory: async (params = {}) => {
-    return fetchWrapper(`${UPLOADS_URL}/history`, {
+    return apiWrapper({
+      url: `${UPLOADS_URL}/history`,
       method: 'GET',
       params,
     });
+  },
+
+  exportErrors: async (uploadId) => {
+    if (!uploadId) return;
+
+    const response = await apiWrapper({
+      url: `${UPLOADS_URL}/${uploadId}/errors/export`,
+      method: 'GET',
+      responseType: 'blob',
+    });
+
+    const blob = new Blob([response], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = `import-errors-${uploadId}.xlsx`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(downloadUrl);
   },
 };

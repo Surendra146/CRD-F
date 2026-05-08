@@ -23,6 +23,7 @@ const DEFAULT_THRESHOLDS = {
   activeCustomerDays: 30,
   atRiskCustomerDays: 60,
   churnedCustomerDays: 90,
+  minimumPurchaseQuantity: 1,
 };
 
 function normalizeData(payload) {
@@ -48,6 +49,8 @@ export default function Settings() {
           activeCustomerDays: Number(nextThresholds.activeCustomerDays) || DEFAULT_THRESHOLDS.activeCustomerDays,
           atRiskCustomerDays: Number(nextThresholds.atRiskCustomerDays) || DEFAULT_THRESHOLDS.atRiskCustomerDays,
           churnedCustomerDays: Number(nextThresholds.churnedCustomerDays) || DEFAULT_THRESHOLDS.churnedCustomerDays,
+          minimumPurchaseQuantity:
+            Number(nextThresholds.minimumPurchaseQuantity) || DEFAULT_THRESHOLDS.minimumPurchaseQuantity,
         });
       }
     },
@@ -63,6 +66,8 @@ export default function Settings() {
           activeCustomerDays: Number(nextThresholds.activeCustomerDays) || DEFAULT_THRESHOLDS.activeCustomerDays,
           atRiskCustomerDays: Number(nextThresholds.atRiskCustomerDays) || DEFAULT_THRESHOLDS.atRiskCustomerDays,
           churnedCustomerDays: Number(nextThresholds.churnedCustomerDays) || DEFAULT_THRESHOLDS.churnedCustomerDays,
+          minimumPurchaseQuantity:
+            Number(nextThresholds.minimumPurchaseQuantity) || DEFAULT_THRESHOLDS.minimumPurchaseQuantity,
         });
       }
 
@@ -91,8 +96,14 @@ export default function Settings() {
     const activeCustomerDays = Number.parseInt(thresholds.activeCustomerDays, 10);
     const atRiskCustomerDays = Number.parseInt(thresholds.atRiskCustomerDays, 10);
     const churnedCustomerDays = Number.parseInt(thresholds.churnedCustomerDays, 10);
+    const minimumPurchaseQuantity = Number.parseInt(thresholds.minimumPurchaseQuantity, 10);
 
-    if (!Number.isFinite(activeCustomerDays) || !Number.isFinite(atRiskCustomerDays) || !Number.isFinite(churnedCustomerDays)) {
+    if (
+      !Number.isFinite(activeCustomerDays) ||
+      !Number.isFinite(atRiskCustomerDays) ||
+      !Number.isFinite(churnedCustomerDays) ||
+      !Number.isFinite(minimumPurchaseQuantity)
+    ) {
       toast.error('Please enter valid numbers for all threshold fields');
       return;
     }
@@ -101,12 +112,17 @@ export default function Settings() {
       toast.error('Threshold order must be Active < At Risk < Churned');
       return;
     }
+    if (minimumPurchaseQuantity < 1) {
+      toast.error('Minimum purchase quantity must be at least 1');
+      return;
+    }
 
     updateSettingsMutation.mutate({
       customerLifecycleThresholds: {
         activeCustomerDays,
         atRiskCustomerDays,
         churnedCustomerDays,
+        minimumPurchaseQuantity,
       },
     });
   };
@@ -211,7 +227,7 @@ export default function Settings() {
             </CardHeader>
 
             <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-4">
                 <label className="space-y-2 text-sm">
                   <span className="font-medium text-slate-700">Active Customer</span>
                   <input
@@ -249,6 +265,21 @@ export default function Settings() {
                     className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none ring-primary-300 transition focus:ring-2 disabled:bg-slate-100 disabled:text-slate-500"
                   />
                   <p className="text-xs text-slate-500">Starts churned classification from this day onward.</p>
+                </label>
+
+                <label className="space-y-2 text-sm">
+                  <span className="font-medium text-slate-700">Min Purchase Qty</span>
+                  <input
+                    type="number"
+                    min="1"
+                    value={thresholds.minimumPurchaseQuantity}
+                    onChange={(event) =>
+                      handleThresholdChange('minimumPurchaseQuantity', event.target.value)
+                    }
+                    disabled={!canManageMembers}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none ring-primary-300 transition focus:ring-2 disabled:bg-slate-100 disabled:text-slate-500"
+                  />
+                  <p className="text-xs text-slate-500">Minimum quantity required for a purchase to count.</p>
                 </label>
               </div>
 

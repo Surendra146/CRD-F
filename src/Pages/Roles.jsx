@@ -11,7 +11,7 @@ import Select from '../components/UI/select';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/UI/card';
 import { getEnabledSidebarModules } from '../config/sidebarModules';
 import { authApi } from '../services/auth';
-import { formatApiError } from '../config/api';
+import { formatApiError } from '../config';
 import { hasRoleAccess } from '../utils/rbac';
 
 const baseRoleOptions = [

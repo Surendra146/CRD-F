@@ -1,10 +1,9 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Activity,
   AlertTriangle,
   DollarSign,
-  MapPin,
   Store,
   ShoppingCart,
   TrendingUp,
@@ -45,10 +44,18 @@ function ChartFallback() {
 }
 
 export default function Dashboard() {
+  const [selectedLocation, setSelectedLocation] = useState('all');
+
   const { data, isLoading, error } = useQuery({
-    queryKey: ['dashboard'],
-    queryFn: () => analyticsApi.getDashboard().then((res) => res?.data || res),
+    queryKey: ['dashboard', selectedLocation],
+    queryFn: () =>
+      analyticsApi
+        .getDashboard(selectedLocation === 'all' ? {} : { location: selectedLocation })
+        .then((res) => res?.data || res),
   });
+
+  const locations = Array.isArray(data?.locations) ? data.locations : [];
+  const locationOptions = ['all', ...locations];
 
   if (isLoading) {
     return (
@@ -80,7 +87,6 @@ export default function Dashboard() {
   const revenue = data.revenue ?? {};
   const segments = data.segments ?? {};
   const recentActivity = Array.isArray(data.recentActivity) ? data.recentActivity : [];
-
   const statCards = [
     {
       title: 'Total Customers',
@@ -148,10 +154,20 @@ export default function Dashboard() {
         subtitle="Overview of your customer lifecycle metrics"
         actions={
           <div className="flex items-center gap-3">
-            <Button variant="outline">
-              <MapPin className="mr-2 h-4 w-4" />
-              Location
-            </Button>
+            <label className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700">
+              <span>Location</span>
+              <select
+                value={selectedLocation}
+                onChange={(event) => setSelectedLocation(event.target.value)}
+                className="bg-transparent text-sm text-gray-900 outline-none"
+              >
+                {locationOptions.map((location) => (
+                  <option key={location} value={location}>
+                    {location === 'all' ? 'All Locations' : location}
+                  </option>
+                ))}
+              </select>
+            </label>
             <Button variant="outline">
               <Store className="mr-2 h-4 w-4" />
               POS Type

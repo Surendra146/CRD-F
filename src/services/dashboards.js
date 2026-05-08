@@ -1,37 +1,42 @@
-import { BASE_URL, fetchWrapper } from '../config/apiConfig';
+import { apiWrapper } from '../config';
 
-const DASHBOARDS_URL = `${BASE_URL}/api/dashboards`;
+const DASHBOARDS_URL = '/api/dashboards';
 
 export const dashboardsApi = {
   getAll: async (params = {}) => {
-    return fetchWrapper(DASHBOARDS_URL, {
+    return apiWrapper({
+      url: DASHBOARDS_URL,
       method: 'GET',
       params,
     });
   },
 
   getById: async (id) => {
-    return fetchWrapper(`${DASHBOARDS_URL}/${id}`, {
+    return apiWrapper({
+      url: `${DASHBOARDS_URL}/${id}`,
       method: 'GET',
     });
   },
 
   create: async (data) => {
-    return fetchWrapper(DASHBOARDS_URL, {
+    return apiWrapper({
+      url: DASHBOARDS_URL,
       method: 'POST',
-      body: JSON.stringify(data),
+      data,
     });
   },
 
   update: async (id, data) => {
-    return fetchWrapper(`${DASHBOARDS_URL}/${id}`, {
+    return apiWrapper({
+      url: `${DASHBOARDS_URL}/${id}`,
       method: 'PUT',
-      body: JSON.stringify(data),
+      data,
     });
   },
 
   delete: async (id) => {
-    return fetchWrapper(`${DASHBOARDS_URL}/${id}`, {
+    return apiWrapper({
+      url: `${DASHBOARDS_URL}/${id}`,
       method: 'DELETE',
     });
   },

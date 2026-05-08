@@ -1,10 +1,11 @@
-import { BASE_URL, fetchWrapper, whatsappSendPath } from '../config/apiConfig';
+import { apiWrapper, whatsappSendPath } from '../config';
 
 export const communicationsApi = {
   sendWhatsApp: async (data) => {
-    return fetchWrapper(`${BASE_URL}${whatsappSendPath}`, {
+    return apiWrapper({
+      url: whatsappSendPath, // already includes /api/...
       method: 'POST',
-      body: JSON.stringify(data),
+      data,
     });
   },
 };

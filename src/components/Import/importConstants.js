@@ -12,13 +12,19 @@ export const importSteps = [
   { num: 1, label: 'Upload File' },
   { num: 2, label: 'Map Columns' },
   { num: 3, label: 'Processing' },
-  { num: 4, label: 'Complete' },
+  { num: 4, label: 'Review & Save' },
 ];
 
 export const maxImportFileSizeMb = 20;
 export const maxImportFileSizeBytes = maxImportFileSizeMb * 1024 * 1024;
 
-export const terminalStatuses = new Set(['completed', 'partial', 'failed']);
+export const terminalStatuses = new Set([
+  'validated',
+  'validated_with_errors',
+  'completed',
+  'partial',
+  'failed',
+]);
 
 export const importTypeOptions = [
   { value: 'customer_details', label: 'Customer Detail Import' },

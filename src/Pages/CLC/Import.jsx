@@ -17,50 +17,15 @@ import {
 } from '../../components/Import/importConstants';
 import useImportProgress from '../../hooks/useImportProgress';
 import { uploadsApi } from '../../services/uploads';
-
-const mandatoryFieldsByImportType = {
-  customer_details: [
-    { value: 'name', label: 'Customer Name' },
-    { value: 'demographics.customerType', label: 'Customer Type' },
-    { value: 'demographics.location.locationName', label: 'Location Name' },
-    { value: 'phone', label: 'Phone Number' },
-    { value: 'address', label: 'Address' },
-    { value: 'demographics.location.country', label: 'Country' },
-    { value: 'demographics.location.state', label: 'State' },
-    { value: 'customerCreatedDate', label: 'Customer Created Date' },
-  ],
-
-  customer_sales: [
-    { value: 'demographics.location.locationName', label: 'Location Name' },
-    { value: 'name', label: 'Customer Name' },
-    { value: 'phone', label: 'Phone Number' },
-    { value: '_orderId', label: 'Order ID' },
-    { value: '_purchasePosNo', label: 'POS No' },
-    { value: '_purchasePrice', label: 'Unit Price' },
-    { value: '_purchaseDate', label: 'Purchase Date' },
-  ],
-};
-
-const hiddenTargetFieldsByImportType = {
-  customer_details: new Set([
-    'externalId',
-    'demographics.location.locationCode',
-    'demographics.location.posNo',
-    'whatsappNumber',
-    '_billType',
-  ]),
-  customer_sales: new Set([
-    'externalId',
-    'demographics.location.locationCode',
-    'whatsappNumber',
-    'demographics.customerType',
-  ]),
-};
-
-const additionalTargetFieldsByImportType = {
-  customer_details: [{ value: 'demographics.customerType', label: 'Customer Type' }],
-  customer_sales: [{ value: '_billType', label: 'Bill Type' }],
-};
+import {
+  additionalTargetFieldsByImportType,
+  hiddenTargetFieldsByImportType,
+  mandatoryFieldsByImportType,
+} from '../../config/importFormFields';
+import {
+  getMissingMandatoryFields,
+  getValidColumnMappings,
+} from '../../config/inputValidation';
 
 const ensureTargetFieldOptions = (options, importType) => {
   const baseOptions = Array.isArray(options) ? options : [];
@@ -74,32 +39,6 @@ const ensureTargetFieldOptions = (options, importType) => {
   });
 
   return Array.from(optionMap.values());
-};
-
-const getValidColumnMappings = (mappings) =>
-  mappings
-    .filter((item) => item && typeof item === 'object')
-    .map((item) => ({
-      ...item,
-      sourceColumn:
-        typeof item.sourceColumn === 'string'
-          ? item.sourceColumn.trim()
-          : item.sourceColumn,
-      targetField:
-        typeof item.targetField === 'string'
-          ? item.targetField.trim()
-          : item.targetField,
-    }))
-    .filter((item) => item.sourceColumn && item.targetField);
-
-const getMissingMandatoryFields = (mappings, importType) => {
-  const selectedTargetFields = new Set(
-    getValidColumnMappings(mappings).map((item) => item.targetField)
-  );
-
-  return (mandatoryFieldsByImportType[importType] || []).filter(
-    (field) => !selectedTargetFields.has(field.value)
-  );
 };
 
 const withDerivedCodeMappings = (mappings) => {
@@ -337,7 +276,11 @@ export default function Import() {
         throw new Error('Please map at least one column before processing');
       }
 
-      const missingMandatoryFields = getMissingMandatoryFields(mappedWithDerivedCodes, importType);
+      const missingMandatoryFields = getMissingMandatoryFields(
+        mappedWithDerivedCodes,
+        importType,
+        mandatoryFieldsByImportType
+      );
 
       if (missingMandatoryFields.length > 0) {
         const firstMissingField = missingMandatoryFields[0];
@@ -373,6 +316,30 @@ export default function Import() {
       );
     },
   });
+  const confirmSaveMutation = useMutation({
+  mutationFn: () => uploadsApi.confirmSave(uploadData.uploadId),
+
+  onSuccess: (response) => {
+    const savedData = response?.data || response;
+
+    setProcessingStatus((prev) => ({
+      ...prev,
+      ...savedData,
+      status: savedData?.status || 'completed',
+      stats: savedData?.stats || prev?.stats,
+    }));
+
+    toast.success('Valid data saved successfully');
+
+    queryClient.invalidateQueries({ queryKey: ['customers'] });
+    queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    queryClient.invalidateQueries({ queryKey: ['upload-history'] });
+  },
+
+  onError: (error) => {
+    toast.error(error.response?.data?.message || error.message || 'Save failed');
+  },
+});
 
   const { data: historyData } = useQuery({
     queryKey: ['upload-history'],
@@ -531,11 +498,14 @@ export default function Import() {
         ) : null}
 
         {step === 4 && processingStatus ? (
-          <ImportResultStep
-            processingStatus={processingStatus}
+         <ImportResultStep
+           processingStatus={processingStatus}
             onReset={resetImport}
-          />
-        ) : null}
+            onConfirmSave={() => confirmSaveMutation.mutate()}
+            isSaving={confirmSaveMutation.isPending}
+            onExportErrors={() => uploadsApi.exportErrors(uploadData?.uploadId)}
+         />
+         ) : null}
       </div>
     </div>
   );

@@ -5,6 +5,8 @@ import toast from 'react-hot-toast';
 import Button from '../components/UI/button';
 import Input from '../components/UI/input';
 import { useAuthStore } from '../store/authstore';
+import { authFormSchemas } from '../config/formSchemas';
+import { validateBySchema } from '../utils/formValidation';
 
 export default function Register() {
   const navigate = useNavigate();
@@ -23,6 +25,20 @@ export default function Register() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    const registrationValidationSchema = {
+      name: authFormSchemas.register.name,
+      companyName: authFormSchemas.register.companyName,
+      phone: authFormSchemas.register.phone,
+      email: authFormSchemas.register.email,
+      password: authFormSchemas.register.password,
+    };
+    const validationError = validateBySchema(formData, registrationValidationSchema);
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+
     const result = await register(formData);
 
     if (result.success) {
@@ -42,6 +58,13 @@ export default function Register() {
 
   const handleOtpSubmit = async (e) => {
     e.preventDefault();
+
+    const otpValidationError = validateBySchema({ otp }, { otp: authFormSchemas.register.otp });
+    if (otpValidationError) {
+      toast.error(otpValidationError);
+      return;
+    }
+
     const result = await register({
       ...formData,
       otp,

@@ -1,9 +1,7 @@
 export {
   BASE_URL,
   SOCKET_URL,
-  axiosInstance,
   apiWrapper,
-  fetchWrapper,
   formatApiError,
   getSocketClient,
   getStoredAuthToken,
@@ -25,4 +23,4 @@ export * from './dashboards';
 export * from './analytics';
 export * from './excel';
 export * from './notifications';
-export * from './auth';    
+export * from './auth';

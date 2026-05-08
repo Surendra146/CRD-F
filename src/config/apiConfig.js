@@ -2,6 +2,9 @@ import axios from 'axios';
 import toast from 'react-hot-toast';
 import { io } from 'socket.io-client';
 
+/* =========================
+   BASE URL
+========================= */
 const backendOrigin =
   import.meta.env.VITE_BACKEND_URL ||
   import.meta.env.VITE_API_URL ||
@@ -10,22 +13,28 @@ const backendOrigin =
 export const BASE_URL = backendOrigin.replace(/\/$/, '');
 export const SOCKET_URL = BASE_URL;
 
-export const whatsappApiMode = import.meta.env.VITE_WHATSAPP_API_MODE || 'api';
+/* =========================
+   WHATSAPP CONFIG (FIXED)
+========================= */
+export const whatsappApiMode =
+  import.meta.env.VITE_WHATSAPP_API_MODE || 'api';
+
 export const whatsappSendPath =
-  import.meta.env.VITE_WHATSAPP_SEND_PATH || '/api/communications/whatsapp/send';
+  import.meta.env.VITE_WHATSAPP_SEND_PATH ||
+  '/api/communications/whatsapp/send';
+
 export const whatsappProvider =
   import.meta.env.VITE_WHATSAPP_PROVIDER || 'meta_cloud';
+
 export const whatsappGraphVersion =
   import.meta.env.VITE_WHATSAPP_GRAPH_VERSION || 'v23.0';
+
 export const whatsappPhoneNumberId =
   import.meta.env.VITE_WHATSAPP_PHONE_NUMBER_ID || '';
 
-export const formatApiError = (error) =>
-  error?.response?.data?.message ||
-  error?.response?.data?.error ||
-  error?.message ||
-  'An error occurred';
-
+/* =========================
+   AUTH TOKEN
+========================= */
 export const getStoredAuthToken = () => {
   const storedAuth = localStorage.getItem('auth-storage');
 
@@ -34,32 +43,46 @@ export const getStoredAuthToken = () => {
   try {
     const parsed = JSON.parse(storedAuth);
     return parsed?.state?.token || null;
-  } catch (error) {
-    console.warn('Failed to parse auth storage:', error);
+  } catch {
     return null;
   }
 };
 
 /* =========================
-   BASE AXIOS CONFIG
+   ERROR FORMATTER
 ========================= */
-export const axiosInstance = axios.create({
+export const formatApiError = (error) =>
+  error?.response?.data?.message ||
+  error?.response?.data?.error ||
+  error?.message ||
+  'Something went wrong';
+
+/* =========================
+   AXIOS INSTANCE
+========================= */
+const api = axios.create({
   baseURL: BASE_URL,
-  timeout: 60000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  timeout: 120000,
+  withCredentials: true,
 });
 
 /* =========================
    REQUEST INTERCEPTOR
 ========================= */
-axiosInstance.interceptors.request.use(
+api.interceptors.request.use(
   (config) => {
     const token = getStoredAuthToken();
 
-    if (token && !config.headers.Authorization) {
+    if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    }
+
+    // Handle FormData safely
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type'];
+      delete config.headers['content-type'];
+    } else {
+      config.headers['Content-Type'] = 'application/json';
     }
 
     return config;
@@ -70,14 +93,13 @@ axiosInstance.interceptors.request.use(
 /* =========================
    RESPONSE INTERCEPTOR
 ========================= */
-axiosInstance.interceptors.response.use(
-  (response) => response,
+api.interceptors.response.use(
+  (response) => response.data,
   (error) => {
     const status = error?.response?.status;
     const message = formatApiError(error);
 
     if (status === 401) {
-      delete axiosInstance.defaults.headers.common.Authorization;
       localStorage.removeItem('auth-storage');
 
       if (!['/login', '/register'].includes(window.location.pathname)) {
@@ -94,48 +116,7 @@ axiosInstance.interceptors.response.use(
 );
 
 /* =========================
-   RATE LIMIT QUEUE SYSTEM
-========================= */
-const requestQueue = [];
-let activeRequests = 0;
-
-const MAX_CONCURRENT_REQUESTS = 5;
-const REQUEST_DELAY_MS = 100;
-
-const processQueue = () => {
-  if (!requestQueue.length || activeRequests >= MAX_CONCURRENT_REQUESTS) {
-    return;
-  }
-
-  const nextRequest = requestQueue.shift();
-
-  if (!nextRequest) return;
-
-  activeRequests += 1;
-
-  nextRequest()
-    .finally(() => {
-      activeRequests -= 1;
-
-      setTimeout(() => {
-        processQueue();
-      }, REQUEST_DELAY_MS);
-    });
-};
-
-const enqueueRequest = (requestFn) =>
-  new Promise((resolve, reject) => {
-    const queuedRequest = () =>
-      requestFn()
-        .then(resolve)
-        .catch(reject);
-
-    requestQueue.push(queuedRequest);
-    processQueue();
-  });
-
-/* =========================
-   AXIOS WRAPPER
+   API WRAPPER
 ========================= */
 export const apiWrapper = async ({
   url,
@@ -145,51 +126,14 @@ export const apiWrapper = async ({
   headers = {},
   responseType,
 }) => {
-  return enqueueRequest(() =>
-    axiosInstance({
-      url,
-      method,
-      data,
-      params,
-      headers,
-      responseType,
-    })
-  );
-};
-
-/* =========================
-   FETCH STYLE WRAPPER
-========================= */
-export const fetchWrapper = async (url, options = {}) => {
-  const {
-    method = 'GET',
-    body,
-    headers = {},
-    params,
-    responseType,
-  } = options;
-
-  let parsedBody = body;
-
-if (body instanceof FormData) {
-  parsedBody = body; // ✅ keep as is
-} else if (body && typeof body === 'string') {
-  try {
-    parsedBody = JSON.parse(body);
-  } catch {
-    parsedBody = body;
-  }
-}
-  const response = await apiWrapper({
+  return api({
     url,
     method,
-    data: parsedBody,
+    data,
     params,
     headers,
     responseType,
   });
-
-  return response.data;
 };
 
 /* =========================
@@ -204,17 +148,13 @@ export const getSocketClient = () => {
     socketInstance = io(SOCKET_URL, {
       autoConnect: false,
       transports: ['websocket'],
-      auth: {
-        token,
-      },
+      auth: { token },
     });
   } else {
-    socketInstance.auth = {
-      token,
-    };
+    socketInstance.auth = { token };
   }
 
   return socketInstance;
 };
 
-export default axiosInstance;
+export default api;

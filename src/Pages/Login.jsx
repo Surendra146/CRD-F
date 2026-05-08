@@ -5,6 +5,8 @@ import toast from 'react-hot-toast';
 import Button from '../components/UI/button';
 import Input from '../components/UI/input';
 import { useAuthStore } from '../store/authstore';
+import { authFormSchemas } from '../config/formSchemas';
+import { validateBySchema } from '../utils/formValidation';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -16,6 +18,13 @@ export default function Login() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    const validationError = validateBySchema(formData, authFormSchemas.login);
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+
     const result = await login(formData.email, formData.password);
 
     if (result.success) {

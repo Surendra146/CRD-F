@@ -1,37 +1,42 @@
-import { BASE_URL, fetchWrapper } from '../config/apiConfig';
+import { apiWrapper } from '../config';
 
-const TEMPLATES_URL = `${BASE_URL}/api/templates`;
+const TEMPLATES_URL = '/api/templates';
 
 export const templatesApi = {
   getAll: async (params = {}) => {
-    return fetchWrapper(TEMPLATES_URL, {
+    return apiWrapper({
+      url: TEMPLATES_URL,
       method: 'GET',
       params,
     });
   },
 
   getById: async (templateId) => {
-    return fetchWrapper(`${TEMPLATES_URL}/${templateId}`, {
+    return apiWrapper({
+      url: `${TEMPLATES_URL}/${templateId}`,
       method: 'GET',
     });
   },
 
   create: async (templateData) => {
-    return fetchWrapper(TEMPLATES_URL, {
+    return apiWrapper({
+      url: TEMPLATES_URL,
       method: 'POST',
-      body: JSON.stringify(templateData),
+      data: templateData,
     });
   },
 
   update: async (templateId, templateData) => {
-    return fetchWrapper(`${TEMPLATES_URL}/${templateId}`, {
+    return apiWrapper({
+      url: `${TEMPLATES_URL}/${templateId}`,
       method: 'PUT',
-      body: JSON.stringify(templateData),
+      data: templateData,
     });
   },
 
   delete: async (templateId) => {
-    return fetchWrapper(`${TEMPLATES_URL}/${templateId}`, {
+    return apiWrapper({
+      url: `${TEMPLATES_URL}/${templateId}`,
       method: 'DELETE',
     });
   },

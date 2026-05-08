@@ -1,10 +1,11 @@
-import { BASE_URL, fetchWrapper } from '../config/apiConfig';
+import { apiWrapper } from '../config';
 
-const NOTIFICATIONS_URL = `${BASE_URL}/api/notifications`;
+const NOTIFICATIONS_URL = '/api/notifications';
 
 export const notificationsApi = {
   getAll: async (params = {}) => {
-    return fetchWrapper(NOTIFICATIONS_URL, {
+    return apiWrapper({
+      url: NOTIFICATIONS_URL,
       method: 'GET',
       params,
     });
