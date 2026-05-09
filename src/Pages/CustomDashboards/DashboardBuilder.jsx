@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   Bar,
@@ -16,29 +16,158 @@ import {
 } from 'recharts';
 import { toast } from 'sonner';
 
+import Button from '../../components/UI/button';
 import Input from '../../components/UI/input';
 import Select from '../../components/UI/select';
 import { useDashboard } from '../../context/useDashboard';
 import { formatApiError } from '../../services/api';
-import { customDashboardAnalyticsApi } from '../../services/analytics';
-import { formatCurrency } from '../../utils/helpers';
+import { excelApi } from '../../services/excel';
 
-const CHART_COLORS = ['#0A0A0A', '#002FA7', '#FF2A2A', '#FFC800', '#4B5563'];
+const CHART_COLORS = ['#0A0A0A', '#002FA7', '#FF2A2A', '#FFC800', '#4B5563', '#16A34A'];
+
+const WIDGET_LIBRARY = [
+  { type: 'total_filter', label: 'Total filter', kind: 'card', defaults: { calculation: 'total' } },
+  { type: 'average_filter', label: 'Average filter', kind: 'card', defaults: { calculation: 'average' } },
+  { type: 'card', label: 'Cards', kind: 'card', defaults: { calculation: 'total' } },
+  { type: 'bar_chart', label: 'Bar chart', kind: 'chart', defaults: { chartType: 'bar', calculation: 'total' } },
+  { type: 'pie_chart', label: 'Pie chart', kind: 'chart', defaults: { chartType: 'pie', calculation: 'total' } },
+  { type: 'line_chart', label: 'Line chart', kind: 'chart', defaults: { chartType: 'line', calculation: 'total' } },
+];
+
+const CALC_OPTIONS = [
+  { value: 'total', label: 'Total' },
+  { value: 'average', label: 'Average' },
+  { value: 'count', label: 'Count' },
+];
+
+const normalizeRecords = (response) => {
+  if (Array.isArray(response)) return response;
+  if (Array.isArray(response?.data)) return response.data;
+  return [];
+};
+
+const toNumber = (value) => {
+  const num = Number.parseFloat(String(value ?? '').replace(/,/g, ''));
+  return Number.isFinite(num) ? num : null;
+};
+
+const isNumericValue = (value) => toNumber(value) !== null;
+
+const applyRowFilter = (row, filterColumn, filterValue) => {
+  if (!filterColumn || !filterValue) return true;
+  return String(row?.[filterColumn] ?? '').toLowerCase() === String(filterValue).toLowerCase();
+};
+
+const computeCardMetric = (rows, config) => {
+  const scoped = rows.filter((row) => applyRowFilter(row, config.filterColumn, config.filterValue));
+  if (config.calculation === 'count') return scoped.length;
+
+  const values = scoped.map((row) => toNumber(row?.[config.valueColumn])).filter((v) => v !== null);
+  if (!values.length) return 0;
+  if (config.calculation === 'average') {
+    return values.reduce((sum, v) => sum + v, 0) / values.length;
+  }
+  return values.reduce((sum, v) => sum + v, 0);
+};
+
+const computeChartMetric = (rows, config) => {
+  const scoped = rows.filter((row) => applyRowFilter(row, config.filterColumn, config.filterValue));
+  if (!config.groupColumn) return [];
+
+  const grouped = scoped.reduce((acc, row) => {
+    const key = String(row?.[config.groupColumn] ?? 'Unknown');
+    if (!acc[key]) {
+      acc[key] = { key, count: 0, sum: 0 };
+    }
+    acc[key].count += 1;
+    const num = toNumber(row?.[config.valueColumn]);
+    if (num !== null) acc[key].sum += num;
+    return acc;
+  }, {});
+
+  return Object.values(grouped).map((item) => ({
+    label: item.key,
+    value:
+      config.calculation === 'count'
+        ? item.count
+        : config.calculation === 'average'
+          ? (item.count ? item.sum / item.count : 0)
+          : item.sum,
+  }));
+};
+
+const formatMetric = (value) => {
+  if (!Number.isFinite(value)) return '0';
+  if (Math.abs(value) >= 1000) return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  return value.toFixed(2).replace(/\.00$/, '');
+};
+
+function WidgetCard({ widget, rows }) {
+  const value = computeCardMetric(rows, widget.config);
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+        {widget.config.calculation}
+      </p>
+      <h4 className="mt-1 text-sm font-semibold text-slate-700">{widget.title}</h4>
+      <p className="mt-3 text-3xl font-black tracking-tight text-slate-900">{formatMetric(value)}</p>
+      <p className="mt-1 text-xs text-slate-500">
+        {widget.config.valueColumn ? `Column: ${widget.config.valueColumn}` : 'Select a numeric column'}
+      </p>
+    </div>
+  );
+}
+
+function WidgetChart({ widget, rows }) {
+  const chartData = computeChartMetric(rows, widget.config).slice(0, Number(widget.config.maxItems || 12));
+  const chartType = widget.config.chartType;
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <h4 className="mb-3 text-sm font-semibold text-slate-700">{widget.title}</h4>
+      <div className="h-64">
+        <ResponsiveContainer width="100%" height="100%">
+          {chartType === 'line' ? (
+            <LineChart data={chartData}>
+              <CartesianGrid stroke="#E5E7EB" strokeDasharray="3 3" />
+              <XAxis dataKey="label" tick={{ fontSize: 12 }} />
+              <YAxis tick={{ fontSize: 12 }} />
+              <Tooltip />
+              <Line type="monotone" dataKey="value" stroke="#0A0A0A" strokeWidth={2} />
+            </LineChart>
+          ) : chartType === 'pie' ? (
+            <PieChart>
+              <Pie data={chartData} dataKey="value" nameKey="label" outerRadius={90} label>
+                {chartData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip />
+            </PieChart>
+          ) : (
+            <BarChart data={chartData}>
+              <CartesianGrid stroke="#E5E7EB" strokeDasharray="3 3" />
+              <XAxis dataKey="label" tick={{ fontSize: 12 }} />
+              <YAxis tick={{ fontSize: 12 }} />
+              <Tooltip />
+              <Bar dataKey="value" fill="#002FA7" />
+            </BarChart>
+          )}
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
 
 export default function DashboardBuilder() {
   const { id } = useParams();
-  const { currentDashboard, fetchDashboard } = useDashboard();
+  const { currentDashboard, fetchDashboard, updateDashboard } = useDashboard();
 
-  const [analyticsData, setAnalyticsData] = useState([]);
-  const [filterOptions, setFilterOptions] = useState({ stores: [], categories: [] });
-  const [filters, setFilters] = useState({
-    dateFrom: '',
-    dateTo: '',
-    store: '',
-    category: '',
-    groupBy: 'date',
-  });
+  const [rows, setRows] = useState([]);
+  const [widgets, setWidgets] = useState([]);
+  const [selectedWidgetId, setSelectedWidgetId] = useState('');
   const [loading, setLoading] = useState(false);
+  const [savingLayout, setSavingLayout] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -46,287 +175,313 @@ export default function DashboardBuilder() {
   }, [id, fetchDashboard]);
 
   useEffect(() => {
-    const fetchFilterOptions = async () => {
-      try {
-        const { data } = await customDashboardAnalyticsApi.getFilters(id);
-        setFilterOptions(data);
-      } catch (error) {
-        console.error('Error fetching filter options:', error);
-      }
-    };
-
-    if (id) {
-      fetchFilterOptions();
-    }
-  }, [id]);
-
-  useEffect(() => {
-    const fetchAnalytics = async () => {
+    const loadRows = async () => {
       setLoading(true);
       try {
-        const params = new URLSearchParams();
-        if (filters.dateFrom) params.append('dateFrom', filters.dateFrom);
-        if (filters.dateTo) params.append('dateTo', filters.dateTo);
-        if (filters.store) params.append('store', filters.store);
-        if (filters.category) params.append('category', filters.category);
-        if (filters.groupBy) params.append('groupBy', filters.groupBy);
-
-        const { data } = await customDashboardAnalyticsApi.getData(id, params);
-        setAnalyticsData(data);
+        const response = await excelApi.getByDashboardId(id);
+        const records = normalizeRecords(response).filter((item) => item && typeof item === 'object');
+        const merged = records.flatMap((item) => (Array.isArray(item.rawData) ? item.rawData : []));
+        setRows(merged);
       } catch (error) {
         toast.error(formatApiError(error));
       } finally {
         setLoading(false);
       }
     };
+    if (id) loadRows();
+  }, [id]);
 
-    if (id && filters.groupBy) {
-      fetchAnalytics();
+  useEffect(() => {
+    const savedWidgets = Array.isArray(currentDashboard?.layout?.widgets)
+      ? currentDashboard.layout.widgets
+      : [];
+    setWidgets(savedWidgets);
+    if (savedWidgets.length) {
+      setSelectedWidgetId(savedWidgets[0].id || '');
     }
-  }, [id, filters]);
+  }, [currentDashboard?._id, currentDashboard?.updatedAt]);
 
-  const totalRevenue = analyticsData.reduce((sum, item) => sum + (item.total || 0), 0);
-  const totalTransactions = analyticsData.reduce((sum, item) => sum + (item.count || 0), 0);
-  const avgTransaction = totalTransactions > 0 ? totalRevenue / totalTransactions : 0;
+  const columns = useMemo(() => {
+    const set = new Set();
+    rows.slice(0, 200).forEach((row) => {
+      Object.keys(row || {}).forEach((key) => set.add(key));
+    });
+    return Array.from(set);
+  }, [rows]);
+
+  const numericColumns = useMemo(() => {
+    return columns.filter((column) => rows.some((row) => isNumericValue(row?.[column])));
+  }, [columns, rows]);
+
+  const selectedWidget = widgets.find((item) => item.id === selectedWidgetId) || null;
+
+  const makeWidget = (libraryType) => {
+    const spec = WIDGET_LIBRARY.find((item) => item.type === libraryType);
+    if (!spec) return null;
+
+    const numericDefault = numericColumns[0] || '';
+    const groupDefault = columns[0] || '';
+    return {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      type: spec.type,
+      kind: spec.kind,
+      title: spec.label,
+      config:
+        spec.kind === 'card'
+          ? {
+              calculation: spec.defaults.calculation,
+              valueColumn: numericDefault,
+              filterColumn: '',
+              filterValue: '',
+            }
+          : {
+              chartType: spec.defaults.chartType,
+              calculation: spec.defaults.calculation,
+              valueColumn: numericDefault,
+              groupColumn: groupDefault,
+              filterColumn: '',
+              filterValue: '',
+              maxItems: 12,
+            },
+    };
+  };
+
+  const addWidget = (libraryType) => {
+    const widget = makeWidget(libraryType);
+    if (!widget) return;
+    setWidgets((prev) => [...prev, widget]);
+    setSelectedWidgetId(widget.id);
+  };
+
+  const updateSelectedWidget = (patch) => {
+    if (!selectedWidgetId) return;
+    setWidgets((prev) =>
+      prev.map((widget) => (widget.id === selectedWidgetId ? { ...widget, ...patch } : widget))
+    );
+  };
+
+  const updateSelectedWidgetConfig = (patch) => {
+    if (!selectedWidgetId) return;
+    setWidgets((prev) =>
+      prev.map((widget) =>
+        widget.id === selectedWidgetId
+          ? { ...widget, config: { ...widget.config, ...patch } }
+          : widget
+      )
+    );
+  };
+
+  const removeWidget = (widgetId) => {
+    setWidgets((prev) => prev.filter((widget) => widget.id !== widgetId));
+    if (selectedWidgetId === widgetId) {
+      setSelectedWidgetId('');
+    }
+  };
+
+  const saveLayout = async () => {
+    if (!id) return;
+    setSavingLayout(true);
+    try {
+      await updateDashboard(id, {
+        layout: {
+          ...(currentDashboard?.layout || {}),
+          widgets,
+        },
+      });
+      toast.success('Dashboard layout saved');
+    } catch (error) {
+      toast.error(error?.message || 'Failed to save dashboard layout');
+    } finally {
+      setSavingLayout(false);
+    }
+  };
+
+  const handleDropOnCanvas = (event) => {
+    event.preventDefault();
+    const type = event.dataTransfer.getData('widgetType');
+    if (type) addWidget(type);
+  };
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-slate-100">
       <div className="p-6 md:p-8">
-        <div className="mb-8">
-          <h1
-            className="mb-2 text-3xl font-black tracking-tighter sm:text-4xl"
-            data-testid="dashboard-title"
-          >
-            {currentDashboard?.name || 'Dashboard'}
+        <div className="mb-6">
+          <h1 className="text-3xl font-black tracking-tighter text-slate-900">
+            {currentDashboard?.name || 'Sales Dashboard Builder'}
           </h1>
-          {currentDashboard?.description ? (
-            <p className="text-sm leading-relaxed text-gray-600 sm:text-base">
-              {currentDashboard.description}
-            </p>
-          ) : null}
-        </div>
-
-        <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-5">
-          <div>
-            <label className="mb-2 block text-xs font-bold uppercase tracking-[0.2em] text-gray-500">
-              From Date
-            </label>
-            <Input
-              type="date"
-              value={filters.dateFrom}
-              onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
-              className="rounded-none border-gray-200 focus:ring-2 focus:ring-black"
-              data-testid="filter-date-from"
-            />
-          </div>
-
-          <div>
-            <label className="mb-2 block text-xs font-bold uppercase tracking-[0.2em] text-gray-500">
-              To Date
-            </label>
-            <Input
-              type="date"
-              value={filters.dateTo}
-              onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
-              className="rounded-none border-gray-200 focus:ring-2 focus:ring-black"
-              data-testid="filter-date-to"
-            />
-          </div>
-
-          <div>
-            <label className="mb-2 block text-xs font-bold uppercase tracking-[0.2em] text-gray-500">
-              Store
-            </label>
-            <Select
-              className="rounded-none border-gray-200 focus:ring-2 focus:ring-black"
-              data-testid="filter-store"
-              value={filters.store}
-              onChange={(e) => setFilters({ ...filters, store: e.target.value })}
-              options={filterOptions.stores.map((store) => ({ value: store, label: store }))}
-              placeholder="All Stores"
-            />
-          </div>
-
-          <div>
-            <label className="mb-2 block text-xs font-bold uppercase tracking-[0.2em] text-gray-500">
-              Category
-            </label>
-            <Select
-              className="rounded-none border-gray-200 focus:ring-2 focus:ring-black"
-              data-testid="filter-category"
-              value={filters.category}
-              onChange={(e) => setFilters({ ...filters, category: e.target.value })}
-              options={filterOptions.categories.map((category) => ({
-                value: category,
-                label: category,
-              }))}
-              placeholder="All Categories"
-            />
-          </div>
-
-          <div>
-            <label className="mb-2 block text-xs font-bold uppercase tracking-[0.2em] text-gray-500">
-              Group By
-            </label>
-            <Select
-              className="rounded-none border-gray-200 focus:ring-2 focus:ring-black"
-              data-testid="filter-group-by"
-              value={filters.groupBy}
-              onChange={(e) => setFilters({ ...filters, groupBy: e.target.value })}
-              options={[
-                { value: 'date', label: 'Date' },
-                { value: 'store', label: 'Store' },
-                { value: 'category', label: 'Category' },
-              ]}
-              placeholder="Group By"
-            />
+          <p className="mt-1 text-sm text-slate-600">
+            Stage 4: Drag widgets from the right panel and drop into the dashboard canvas.
+          </p>
+          <div className="mt-3">
+            <Button onClick={saveLayout} isLoading={savingLayout}>
+              {savingLayout ? 'Saving...' : 'Save Layout'}
+            </Button>
           </div>
         </div>
 
-        <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3">
-          <div className="border border-gray-200 p-6" data-testid="stat-total-revenue">
-            <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-gray-500">
-              Total Revenue
-            </p>
-            <p className="text-3xl font-black tracking-tighter">
-              {formatCurrency(totalRevenue)}
-            </p>
-          </div>
-
-          <div className="border border-gray-200 p-6" data-testid="stat-transactions">
-            <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-gray-500">
-              Transactions
-            </p>
-            <p className="text-3xl font-black tracking-tighter">
-              {totalTransactions.toLocaleString()}
-            </p>
-          </div>
-
-          <div className="border border-gray-200 p-6" data-testid="stat-avg-transaction">
-            <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-gray-500">
-              Avg Transaction
-            </p>
-            <p className="text-3xl font-black tracking-tighter">
-              {formatCurrency(avgTransaction)}
-            </p>
-          </div>
-        </div>
-
-        {loading ? (
-          <div className="py-12 text-center">
-            <p className="text-gray-500">Loading analytics...</p>
-          </div>
-        ) : analyticsData.length === 0 ? (
-          <div className="border border-gray-200 py-12 text-center">
-            <p className="mb-2 text-xl font-bold text-gray-800">No data available</p>
-            <p className="text-sm text-gray-600">
-              Upload and map Excel files to see analytics
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <div className="h-full border border-gray-200 p-6" data-testid="line-chart">
-              <h3 className="mb-4 text-xl font-bold tracking-tight">Revenue Trend</h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={analyticsData}>
-                  <CartesianGrid stroke="#E5E7EB" strokeDasharray="3 3" />
-                  <XAxis dataKey="label" stroke="#4B5563" tick={{ fontSize: 12 }} />
-                  <YAxis stroke="#4B5563" tick={{ fontSize: 12 }} />
-                  <Tooltip
-                    contentStyle={{ border: '1px solid #E5E7EB', borderRadius: 0 }}
-                    formatter={(value) => formatCurrency(value)}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="total"
-                    stroke="#0A0A0A"
-                    strokeWidth={2}
-                    dot={{ fill: '#0A0A0A', r: 4 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_320px]">
+          <section
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={handleDropOnCanvas}
+            className="min-h-[70vh] rounded-2xl border border-slate-200 bg-white p-5"
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-slate-800">Dashboard Canvas</h2>
+              <span className="text-xs text-slate-500">{widgets.length} widget(s)</span>
             </div>
 
-            <div className="h-full border border-gray-200 p-6" data-testid="bar-chart">
-              <h3 className="mb-4 text-xl font-bold tracking-tight">Transaction Count</h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={analyticsData}>
-                  <CartesianGrid stroke="#E5E7EB" strokeDasharray="3 3" />
-                  <XAxis dataKey="label" stroke="#4B5563" tick={{ fontSize: 12 }} />
-                  <YAxis stroke="#4B5563" tick={{ fontSize: 12 }} />
-                  <Tooltip contentStyle={{ border: '1px solid #E5E7EB', borderRadius: 0 }} />
-                  <Bar dataKey="count" fill="#002FA7" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div className="h-full border border-gray-200 p-6" data-testid="pie-chart">
-              <h3 className="mb-4 text-xl font-bold tracking-tight">Revenue Distribution</h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={analyticsData.slice(0, 5)}
-                    dataKey="total"
-                    nameKey="label"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={100}
-                    label={(entry) => entry.label}
+            {loading ? (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center text-sm text-slate-500">
+                Loading mapped data...
+              </div>
+            ) : rows.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center text-sm text-slate-500">
+                No mapped rows found. Complete upload and column mapping first.
+              </div>
+            ) : widgets.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center text-sm text-slate-500">
+                Drag and drop a widget from the right side to start building your dashboard.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                {widgets.map((widget) => (
+                  <div
+                    key={widget.id}
+                    className={`relative rounded-xl ${
+                      selectedWidgetId === widget.id ? 'ring-2 ring-primary-400' : ''
+                    }`}
+                    onClick={() => setSelectedWidgetId(widget.id)}
                   >
-                    {analyticsData.slice(0, 5).map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={CHART_COLORS[index % CHART_COLORS.length]}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{ border: '1px solid #E5E7EB', borderRadius: 0 }}
-                    formatter={(value) => formatCurrency(value)}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        removeWidget(widget.id);
+                      }}
+                      className="absolute right-3 top-3 z-10 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-500 hover:bg-slate-50"
+                    >
+                      Remove
+                    </button>
+                    {widget.kind === 'card' ? (
+                      <WidgetCard widget={widget} rows={rows} />
+                    ) : (
+                      <WidgetChart widget={widget} rows={rows} />
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
 
-            <div className="h-full border border-gray-200 p-6" data-testid="data-table">
-              <h3 className="mb-4 text-xl font-bold tracking-tight">Data Summary</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="px-2 py-3 text-left text-xs font-bold uppercase tracking-[0.2em] text-gray-500">
-                        Label
-                      </th>
-                      <th className="px-2 py-3 text-right text-xs font-bold uppercase tracking-[0.2em] text-gray-500">
-                        Revenue
-                      </th>
-                      <th className="px-2 py-3 text-right text-xs font-bold uppercase tracking-[0.2em] text-gray-500">
-                        Count
-                      </th>
-                      <th className="px-2 py-3 text-right text-xs font-bold uppercase tracking-[0.2em] text-gray-500">
-                        Avg
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {analyticsData.slice(0, 10).map((item, index) => (
-                      <tr key={index} className="border-b border-gray-100">
-                        <td className="px-2 py-3 font-medium text-gray-800">{item.label}</td>
-                        <td className="px-2 py-3 text-right text-gray-800">
-                          {formatCurrency(item.total)}
-                        </td>
-                        <td className="px-2 py-3 text-right text-gray-800">{item.count}</td>
-                        <td className="px-2 py-3 text-right text-gray-800">
-                          {formatCurrency(item.average)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+          <aside className="space-y-4">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <h3 className="mb-3 text-sm font-semibold text-slate-800">Available Widgets</h3>
+              <div className="space-y-2">
+                {WIDGET_LIBRARY.map((item) => (
+                  <button
+                    key={item.type}
+                    type="button"
+                    draggable
+                    onDragStart={(event) => event.dataTransfer.setData('widgetType', item.type)}
+                    onClick={() => addWidget(item.type)}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:border-primary-300 hover:bg-primary-50"
+                  >
+                    {item.label}
+                  </button>
+                ))}
               </div>
             </div>
-          </div>
-        )}
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <h3 className="mb-3 text-sm font-semibold text-slate-800">Widget Configuration</h3>
+              {!selectedWidget ? (
+                <p className="text-sm text-slate-500">Select a widget from canvas to configure it.</p>
+              ) : (
+                <div className="space-y-3">
+                  <Input
+                    label="Widget name"
+                    value={selectedWidget.title}
+                    onChange={(event) => updateSelectedWidget({ title: event.target.value })}
+                  />
+
+                  <Select
+                    label="Filter type"
+                    value={selectedWidget.config.calculation}
+                    onChange={(event) => updateSelectedWidgetConfig({ calculation: event.target.value })}
+                    options={CALC_OPTIONS}
+                    placeholder="Choose calculation"
+                  />
+
+                  <Select
+                    label="Column to calculate"
+                    value={selectedWidget.config.valueColumn}
+                    onChange={(event) => updateSelectedWidgetConfig({ valueColumn: event.target.value })}
+                    options={numericColumns.map((column) => ({ value: column, label: column }))}
+                    placeholder="Numeric column"
+                  />
+
+                  {selectedWidget.kind === 'chart' ? (
+                    <>
+                      <Select
+                        label="Chart type"
+                        value={selectedWidget.config.chartType}
+                        onChange={(event) => updateSelectedWidgetConfig({ chartType: event.target.value })}
+                        options={[
+                          { value: 'bar', label: 'Bar chart' },
+                          { value: 'pie', label: 'Pie chart' },
+                          { value: 'line', label: 'Line chart' },
+                        ]}
+                        placeholder="Choose chart"
+                      />
+
+                      <Select
+                        label="Group by column"
+                        value={selectedWidget.config.groupColumn}
+                        onChange={(event) => updateSelectedWidgetConfig({ groupColumn: event.target.value })}
+                        options={columns.map((column) => ({ value: column, label: column }))}
+                        placeholder="Column"
+                      />
+
+                      <Input
+                        label="Max categories"
+                        type="number"
+                        value={selectedWidget.config.maxItems}
+                        onChange={(event) =>
+                          updateSelectedWidgetConfig({
+                            maxItems: Math.max(1, Number.parseInt(event.target.value || '1', 10)),
+                          })
+                        }
+                      />
+                    </>
+                  ) : null}
+
+                  <Select
+                    label="Optional filter column"
+                    value={selectedWidget.config.filterColumn}
+                    onChange={(event) => updateSelectedWidgetConfig({ filterColumn: event.target.value })}
+                    options={columns.map((column) => ({ value: column, label: column }))}
+                    placeholder="No filter"
+                  />
+
+                  <Input
+                    label="Optional filter value"
+                    value={selectedWidget.config.filterValue}
+                    onChange={(event) => updateSelectedWidgetConfig({ filterValue: event.target.value })}
+                  />
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => removeWidget(selectedWidget.id)}
+                  >
+                    Remove Widget
+                  </Button>
+                </div>
+              )}
+            </div>
+          </aside>
+        </div>
       </div>
     </div>
   );

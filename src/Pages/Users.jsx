@@ -39,16 +39,15 @@ export default function Users() {
   });
 
   const roleProfiles = useMemo(() => {
-    const builtIn = Array.isArray(rolesData?.builtInRoles) ? rolesData.builtInRoles : [];
     const custom = Array.isArray(rolesData?.customRoles) ? rolesData.customRoles : [];
-    return [...builtIn, ...custom];
+    return custom;
   }, [rolesData]);
 
   const roleOptions = useMemo(
     () =>
       roleProfiles.map((role) => ({
         value: role.key,
-        label: `${role.name}${role.isBuiltIn ? '' : ' (Custom)'}`,
+        label: role.name,
       })),
     [roleProfiles]
   );

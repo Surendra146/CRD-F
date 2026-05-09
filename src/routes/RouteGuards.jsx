@@ -1,7 +1,6 @@
 import { Navigate } from 'react-router-dom';
 
 import { useAuthStore } from '../store/authstore';
-import { hasRoleAccess } from '../utils/rbac';
 import { resolveDefaultRoute } from '../utils/defaultRoute';
 import { normalizeAllowedModules } from '../utils/moduleAccess';
 
@@ -30,15 +29,11 @@ export function PublicRoute({ children }) {
   return children;
 }
 
-export function RoleRoute({ children, allowedRoles = [] }) {
+export function RoleRoute({ children }) {
   const { isAuthenticated, user } = useAuthStore();
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
-  }
-
-  if (allowedRoles.length && !hasRoleAccess(user?.role, allowedRoles)) {
-    return <Navigate to={resolveDefaultRoute(user)} replace />;
   }
 
   return children;

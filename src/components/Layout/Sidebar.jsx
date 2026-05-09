@@ -27,7 +27,6 @@ export default function Sidebar() {
 
   const navigation = useMemo(() => {
     return getEnabledSidebarModules()
-      .filter((item) => canAccessModule(user, item))
       .map((item) => ({
         ...item,
         children: Array.isArray(item.children)
@@ -36,7 +35,10 @@ export default function Sidebar() {
             )
           : undefined,
       }))
-      .filter((item) => !Array.isArray(item.children) || item.children.length > 0);
+      .filter((item) => {
+        const hasVisibleChildren = Array.isArray(item.children) && item.children.length > 0;
+        return canAccessModule(user, item) || hasVisibleChildren;
+      });
   }, [user?.role, JSON.stringify(user?.allowedModules || [])]);
 
   const parentKeysText = useMemo(() => {

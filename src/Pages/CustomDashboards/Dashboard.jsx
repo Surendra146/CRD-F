@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useDashboard } from '../../context/useDashboard';
 import { useAuthStore } from '../../store/authstore';
+import { normalizeAllowedModules } from '../../utils/moduleAccess';
 import { Plus, ChartLine, Calendar, Trash } from '@phosphor-icons/react';
 import { formatDate } from '../../utils/helpers';
 import { toast } from 'sonner';
@@ -152,8 +153,7 @@ const DashboardList = () => {
     }
   };
   
-  const canCreateOrDelete =
-    user?.role === 'owner' || user?.role === 'admin' || user?.role === 'manager';
+  const canCreateOrDelete = normalizeAllowedModules(user?.allowedModules).includes('custom-dashboards');
 
   const customerUploadEntries = useMemo(() => {
     const uploads = Array.isArray(customerUploadHistoryData?.data) ? customerUploadHistoryData.data : [];

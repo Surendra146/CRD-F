@@ -17,7 +17,7 @@ import Button from '../../components/UI/button.jsx';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/UI/card.jsx';
 import { authApi } from '../../services/auth.js';
 import { useAuthStore } from '../../store/authstore.js';
-import { hasRoleAccess } from '../../utils/rbac.js';
+import { normalizeAllowedModules } from '../../utils/moduleAccess.js';
 
 const DEFAULT_THRESHOLDS = {
   activeCustomerDays: 30,
@@ -36,7 +36,9 @@ export default function Settings() {
   const [thresholds, setThresholds] = useState(DEFAULT_THRESHOLDS);
 
   const tenantCode = user?.tenantCode || user?.organization?.tenantCode || 'Not available';
-  const canManageMembers = hasRoleAccess(user?.role, ['admin']);
+  const allowedModules = normalizeAllowedModules(user?.allowedModules);
+  const canManageMembers = allowedModules.includes('roles') || allowedModules.includes('users');
+  const canManageThresholds = ['owner', 'admin'].includes((user?.role || '').toLowerCase());
 
   const settingsQuery = useQuery({
     queryKey: ['organization-settings'],
@@ -168,7 +170,7 @@ export default function Settings() {
               <p className="text-sm font-medium text-gray-800">
                 {token ? 'Session active' : 'No active session'}
               </p>
-              <p className="mt-1 text-xs text-gray-500">Role: {user?.role || 'viewer'}</p>
+              <p className="mt-1 text-xs text-gray-500">Profile: {user?.roleProfileName || 'Custom role'}</p>
             </div>
 
             <Button variant="outline" className="w-full" onClick={handleLogout}>
@@ -215,7 +217,7 @@ export default function Settings() {
                 </div>
               ) : (
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-                  Your role can view settings, but role and user management are limited to admin and owner users.
+                  You can view settings, but role and user management are limited to assigned custom role access.
                 </div>
               )}
             </CardContent>
@@ -235,7 +237,7 @@ export default function Settings() {
                     min="1"
                     value={thresholds.activeCustomerDays}
                     onChange={(event) => handleThresholdChange('activeCustomerDays', event.target.value)}
-                    disabled={!canManageMembers}
+                    disabled={!canManageThresholds}
                     className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none ring-primary-300 transition focus:ring-2 disabled:bg-slate-100 disabled:text-slate-500"
                   />
                   <p className="text-xs text-slate-500">Days since last purchase for active status.</p>
@@ -248,7 +250,7 @@ export default function Settings() {
                     min="2"
                     value={thresholds.atRiskCustomerDays}
                     onChange={(event) => handleThresholdChange('atRiskCustomerDays', event.target.value)}
-                    disabled={!canManageMembers}
+                    disabled={!canManageThresholds}
                     className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none ring-primary-300 transition focus:ring-2 disabled:bg-slate-100 disabled:text-slate-500"
                   />
                   <p className="text-xs text-slate-500">Starts at-risk classification from this day onward.</p>
@@ -261,7 +263,7 @@ export default function Settings() {
                     min="3"
                     value={thresholds.churnedCustomerDays}
                     onChange={(event) => handleThresholdChange('churnedCustomerDays', event.target.value)}
-                    disabled={!canManageMembers}
+                    disabled={!canManageThresholds}
                     className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none ring-primary-300 transition focus:ring-2 disabled:bg-slate-100 disabled:text-slate-500"
                   />
                   <p className="text-xs text-slate-500">Starts churned classification from this day onward.</p>
@@ -276,14 +278,14 @@ export default function Settings() {
                     onChange={(event) =>
                       handleThresholdChange('minimumPurchaseQuantity', event.target.value)
                     }
-                    disabled={!canManageMembers}
+                    disabled={!canManageThresholds}
                     className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none ring-primary-300 transition focus:ring-2 disabled:bg-slate-100 disabled:text-slate-500"
                   />
                   <p className="text-xs text-slate-500">Minimum quantity required for a purchase to count.</p>
                 </label>
               </div>
 
-              {canManageMembers ? (
+              {canManageThresholds ? (
                 <div className="flex items-center justify-end">
                   <Button onClick={handleSaveThresholds} disabled={updateSettingsMutation.isPending}>
                     {updateSettingsMutation.isPending ? 'Saving...' : 'Save Thresholds'}
@@ -291,7 +293,7 @@ export default function Settings() {
                 </div>
               ) : (
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-                  Threshold values are managed by admin or owner users.
+                  Threshold values are managed only by owner or admin users.
                 </div>
               )}
 
@@ -319,7 +321,7 @@ export default function Settings() {
               </div>
               <div className="flex gap-2">
                 <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-600" />
-                <p>Use admin or owner accounts to manage RBAC and lifecycle settings.</p>
+                <p>Use custom roles with the required modules to manage RBAC and lifecycle settings.</p>
               </div>
             </CardContent>
           </Card>

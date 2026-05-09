@@ -23,7 +23,7 @@ import { campaignsApi } from '../../services/campaigns.js';
 import { segmentsApi } from '../../services/segments.js';
 import { templatesApi } from '../../services/templates.js';
 import { useAuthStore } from '../../store/authstore.js';
-import { hasRoleAccess } from '../../utils/rbac.js';
+import { normalizeAllowedModules } from '../../utils/moduleAccess.js';
 import { formatDate, formatNumber } from '../../utils/format.js';
 
 function normalizeCollection(payload) {
@@ -103,7 +103,7 @@ export default function Campaigns() {
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
 
-  const canManageCampaigns = hasRoleAccess(user?.role, ['manager']);
+  const canManageCampaigns = normalizeAllowedModules(user?.allowedModules).includes('campaigns');
 
   const [showCampaignModal, setShowCampaignModal] = useState(false);
 
@@ -175,6 +175,24 @@ export default function Campaigns() {
       queryClient.invalidateQueries({ queryKey: ['campaigns'] });
     },
     onError: (error) => toast.error(error?.response?.data?.message || 'Failed to pause campaign'),
+  });
+
+  const resumeCampaignMutation = useMutation({
+    mutationFn: (campaignId) => campaignsApi.resume(campaignId),
+    onSuccess: () => {
+      toast.success('Campaign resumed');
+      queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+    },
+    onError: (error) => toast.error(error?.response?.data?.message || 'Failed to resume campaign'),
+  });
+
+  const completeCampaignMutation = useMutation({
+    mutationFn: (campaignId) => campaignsApi.complete(campaignId),
+    onSuccess: () => {
+      toast.success('Campaign completed');
+      queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+    },
+    onError: (error) => toast.error(error?.response?.data?.message || 'Failed to complete campaign'),
   });
 
   const toggleCampaignMulti = (key, value) => {
@@ -344,6 +362,21 @@ export default function Campaigns() {
                 <TableBody>
                   {campaigns.map((campaign) => (
                     <TableRow key={campaign._id || campaign.id || campaign.name}>
+                      {(() => {
+                        const isLaunching = launchCampaignMutation.isPending;
+                        const isPausing = pauseCampaignMutation.isPending;
+                        const isResuming = resumeCampaignMutation.isPending;
+                        const isCompleting = completeCampaignMutation.isPending;
+                        const disableActions =
+                          isLaunching || isPausing || isResuming || isCompleting;
+                        const isActive = ['active', 'running'].includes(campaign.status);
+                        const canLaunch = ['draft', 'scheduled'].includes(campaign.status);
+                        const canPause = isActive;
+                        const canResume = campaign.status === 'paused';
+                        const canComplete = isActive || campaign.status === 'paused';
+
+                        return (
+                          <>
                       <TableCell>
                         <div>
                           <p className="font-medium text-gray-900">
@@ -371,30 +404,56 @@ export default function Campaigns() {
 
                       <TableCell>
                         <div className="flex items-center justify-end gap-2">
-                          {canManageCampaigns && ['draft', 'scheduled', 'paused'].includes(campaign.status) ? (
+                          {canManageCampaigns && canLaunch ? (
                             <Button
                               size="sm"
                               onClick={() => launchCampaignMutation.mutate(campaign._id)}
-                              disabled={launchCampaignMutation.isPending || pauseCampaignMutation.isPending}
+                              disabled={disableActions}
                             >
                               <PlayCircle className="mr-1 h-4 w-4" />
                               Launch
                             </Button>
                           ) : null}
 
-                          {canManageCampaigns && campaign.status === 'running' ? (
+                          {canManageCampaigns && canPause ? (
                             <Button
                               size="sm"
                               variant="outline"
                               onClick={() => pauseCampaignMutation.mutate(campaign._id)}
-                              disabled={launchCampaignMutation.isPending || pauseCampaignMutation.isPending}
+                              disabled={disableActions}
                             >
                               <PauseCircle className="mr-1 h-4 w-4" />
                               Pause
                             </Button>
                           ) : null}
+
+                          {canManageCampaigns && canResume ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => resumeCampaignMutation.mutate(campaign._id)}
+                              disabled={disableActions}
+                            >
+                              <PlayCircle className="mr-1 h-4 w-4" />
+                              Resume
+                            </Button>
+                          ) : null}
+
+                          {canManageCampaigns && canComplete ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => completeCampaignMutation.mutate(campaign._id)}
+                              disabled={disableActions}
+                            >
+                              Complete
+                            </Button>
+                          ) : null}
                         </div>
                       </TableCell>
+                          </>
+                        );
+                      })()}
                     </TableRow>
                   ))}
                 </TableBody>

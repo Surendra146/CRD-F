@@ -6,7 +6,7 @@ export const excelApi = {
   /* =========================
      FILE UPLOAD (IMPORTANT)
   ========================= */
-  upload: async ({ file, dashboardId, sourceName, headerRow }) => {
+  upload: async ({ file, dashboardId, sourceName }) => {
     if (!file) {
       throw new Error('Please select a file before uploading');
     }
@@ -15,8 +15,6 @@ export const excelApi = {
     formData.append('file', file);
     formData.append('dashboardId', dashboardId);
     formData.append('sourceName', sourceName);
-    formData.append('headerRow', headerRow);
-
     return apiWrapper({
       url: `${EXCEL_URL}/upload`,
       method: 'POST',

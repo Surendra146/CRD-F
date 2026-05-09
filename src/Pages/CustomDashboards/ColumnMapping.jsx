@@ -5,20 +5,15 @@ import { toast } from 'sonner';
 import ColumnMappingWorkspace from '../../components/Mapping/ColumnMappingWorkspace';
 import { formatApiError } from '../../services/api';
 import { excelApi } from '../../services/excel';
-
-const mappingOptions = [
-  { value: 'none', label: 'None' },
-  { value: 'date', label: 'Date' },
-  { value: 'amount', label: 'Amount' },
-  { value: 'store', label: 'Store' },
-  { value: 'category', label: 'Category' },
-];
+import { uploadsApi } from '../../services/uploads';
+import { targetFieldOptionsFallback } from '../../components/Import/importConstants';
 
 export default function ColumnMapping() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [excelData, setExcelData] = useState([]);
   const [mappings, setMappings] = useState({});
+  const [targetFieldOptions, setTargetFieldOptions] = useState(targetFieldOptionsFallback);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -49,12 +44,26 @@ export default function ColumnMapping() {
     }
   }, [id]);
 
+  useEffect(() => {
+    const fetchTargetFields = async () => {
+      try {
+        const response = await uploadsApi.getTargetFields('customer_sales');
+        const options = Array.isArray(response?.data) ? response.data : [];
+        setTargetFieldOptions(options.length ? options : targetFieldOptionsFallback);
+      } catch {
+        setTargetFieldOptions(targetFieldOptionsFallback);
+      }
+    };
+
+    fetchTargetFields();
+  }, []);
+
   const handleChange = (excelId, header, value) => {
     setMappings((prev) => ({
       ...prev,
       [excelId]: {
         ...prev[excelId],
-        [header]: value === 'none' ? null : value,
+        [header]: value === '' ? null : value,
       },
     }));
   };
@@ -103,8 +112,8 @@ export default function ColumnMapping() {
                 selects: [
                   {
                     key: 'target-field',
-                    options: mappingOptions,
-                    value: mappings[record._id]?.[header] ?? 'none',
+                    options: targetFieldOptions,
+                    value: mappings[record._id]?.[header] ?? '',
                     onChange: (value) => handleChange(record._id, header, value),
                     widthClassName: 'w-1/3',
                     placeholder: 'Map to',

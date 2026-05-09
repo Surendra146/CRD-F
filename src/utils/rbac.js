@@ -1,22 +1,19 @@
 import { moduleAccessKey, normalizeAllowedModules } from './moduleAccess';
 
-const ROLE_HIERARCHY = ['viewer', 'analyst', 'manager', 'admin', 'owner'];
-
 export function normalizeRole(role) {
-  const value = (role || '').toString().trim().toLowerCase();
-  return ROLE_HIERARCHY.includes(value) ? value : 'viewer';
+  return (role || '').toString().trim();
 }
 
 export function hasRoleAccess(userRole, allowedRoles = []) {
-  const normalizedUserRole = normalizeRole(userRole);
-  const normalizedAllowedRoles = allowedRoles.map(normalizeRole);
-
-  return normalizedAllowedRoles.some(
-    (role) => ROLE_HIERARCHY.indexOf(normalizedUserRole) >= ROLE_HIERARCHY.indexOf(role)
-  );
+  return true;
 }
 
 export function canAccessModule(user, module) {
+  const normalizedRole = (user?.role || '').toString().trim().toLowerCase();
+  if (normalizedRole === 'owner' || normalizedRole === 'admin') {
+    return true;
+  }
+
   const assignedModules = normalizeAllowedModules(user?.allowedModules);
   const accessKey = moduleAccessKey(module);
 
@@ -28,5 +25,5 @@ export function canAccessModule(user, module) {
     return true;
   }
 
-  return hasRoleAccess(user?.role, module.roles);
+  return true;
 }

@@ -18,8 +18,7 @@ const ExcelUpload = () => {
     if (id) fetchDashboard(id);
   }, [id]);
 
-  // ✅ FIXED: source-wise upload with headerRow
-  const handleUpload = async (files, sourceName, headerRow) => {
+  const handleUpload = async (files, sourceName) => {
     if (!files.length) return;
 
     setUploading(true);
@@ -29,7 +28,6 @@ const ExcelUpload = () => {
         file: files[0],
         dashboardId: id,
         sourceName,
-        headerRow,
       });
       toast.success(`${sourceName} uploaded successfully`);
       await fetchDashboard(id);
@@ -62,8 +60,8 @@ const ExcelUpload = () => {
               key={source.name}
               source={source}
               uploading={uploading}
-              onUpload={(files, headerRow) =>
-                handleUpload(files, source.name, headerRow)
+              onUpload={(files) =>
+                handleUpload(files, source.name)
               }
             />
           ))}
@@ -88,16 +86,10 @@ const ExcelUpload = () => {
 
 export default ExcelUpload;
 
-/* =====================================================
-   SOURCE UPLOAD CARD (INLINE OR SEPARATE FILE)
-===================================================== */
-
 const SourceUploadCard = ({ source, onUpload, uploading }) => {
-  const [headerRow, setHeaderRow] = useState(1);
-
   const { getRootProps, getInputProps, isDragActive } =
     useDropzone({
-      onDrop: files => onUpload(files, headerRow),
+      onDrop: files => onUpload(files),
       accept: {
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': [
           '.xlsx'
@@ -121,22 +113,6 @@ const SourceUploadCard = ({ source, onUpload, uploading }) => {
             Uploaded
           </span>
         )}
-      </div>
-
-      {/* Header row input */}
-      <div className="mb-4">
-        <label className="text-xs font-semibold text-gray-600 uppercase">
-          Header Row Number
-        </label>
-        <input
-          type="number"
-          min={1}
-          value={headerRow}
-          onChange={e =>
-            setHeaderRow(Number(e.target.value))
-          }
-          className="mt-1 border px-3 py-2 w-24 text-sm"
-        />
       </div>
 
       <div

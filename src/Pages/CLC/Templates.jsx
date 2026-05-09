@@ -24,7 +24,7 @@ import { segmentsApi } from '../../services/segments.js';
 import { templatesApi } from '../../services/templates.js';
 
 import { useAuthStore } from '../../store/authstore.js';
-import { hasRoleAccess } from '../../utils/rbac.js';
+import { normalizeAllowedModules } from '../../utils/moduleAccess.js';
 import { formatDate, formatNumber, truncate } from '../../utils/format.js';
 
 /* =========================
@@ -80,8 +80,8 @@ export default function Templates() {
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
 
-  const canManageTemplates = hasRoleAccess(user?.role, ['manager']);
-  const canDeleteTemplates = hasRoleAccess(user?.role, ['admin']);
+  const allowedModules = normalizeAllowedModules(user?.allowedModules);
+  const canManageTemplates = allowedModules.includes('templates');
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingTemplateId, setEditingTemplateId] = useState(null);
@@ -329,13 +329,15 @@ export default function Templates() {
                           <Edit className="h-4 w-4" />
                         </Button>
 
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => deleteTemplateMutation.mutate(template._id)}
-                        >
-                          <Trash2 className="h-4 w-4 text-red-600" />
-                        </Button>
+                        {canManageTemplates ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => deleteTemplateMutation.mutate(template._id)}
+                          >
+                            <Trash2 className="h-4 w-4 text-red-600" />
+                          </Button>
+                        ) : null}
                       </TableCell>
                     </TableRow>
                   ))}

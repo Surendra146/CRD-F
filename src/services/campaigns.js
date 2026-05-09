@@ -62,4 +62,18 @@ export const campaignsApi = {
       method: 'POST',
     });
   },
+
+  resume: async (campaignId) => {
+    return apiWrapper({
+      url: `${CAMPAIGNS_URL}/${campaignId}/resume`,
+      method: 'POST',
+    });
+  },
+
+  complete: async (campaignId) => {
+    return apiWrapper({
+      url: `${CAMPAIGNS_URL}/${campaignId}/complete`,
+      method: 'POST',
+    });
+  },
 };
