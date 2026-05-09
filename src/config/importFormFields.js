@@ -37,7 +37,12 @@ export const hiddenTargetFieldsByImportType = {
 };
 
 export const additionalTargetFieldsByImportType = {
-  customer_details: [{ value: 'demographics.customerType', label: 'Customer Type' }],
-  customer_sales: [{ value: '_billType', label: 'Bill Type' }],
+  customer_details: [
+    { value: 'demographics.customerType', label: 'Customer Type' },
+    { value: 'lifecycle.segment', label: 'Customer Segment' },
+  ],
+  customer_sales: [
+    { value: '_billType', label: 'Bill Type' },
+    { value: 'lifecycle.segment', label: 'Customer Segment' },
+  ],
 };
-

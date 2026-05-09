@@ -75,6 +75,7 @@ export default function Import() {
   const [debugEvents, setDebugEvents] = useState([]);
   const [importType, setImportType] = useState(importTypeOptions[0].value);
   const [targetFieldOptions, setTargetFieldOptions] = useState(targetFieldOptionsFallback);
+  const [isRecentUploadsCleared, setIsRecentUploadsCleared] = useState(false);
 
   const targetFieldOptionsWithMandatoryMarks = useMemo(() => {
     const hiddenTargetFieldSet = hiddenTargetFieldsByImportType[importType] || new Set();
@@ -443,6 +444,11 @@ export default function Import() {
     setTargetFieldOptions(targetFieldOptionsFallback);
   };
 
+  const handleRefreshRecentUploads = () => {
+    setIsRecentUploadsCleared(true);
+    toast.success('Recent uploads list cleared from Import module');
+  };
+
   const progressTotal = processingStatus?.stats?.totalRows || uploadData?.totalRows || 0;
   const progressProcessed = processingStatus?.stats?.processedRows || 0;
 
@@ -467,9 +473,11 @@ export default function Import() {
             isDragActive={isDragActive}
             isUploading={uploadMutation.isPending}
             historyData={historyData}
+            isRecentUploadsCleared={isRecentUploadsCleared}
             maxFileSizeMb={maxImportFileSizeMb}
             importType={importType}
             onImportTypeChange={setImportType}
+            onRefreshRecentUploads={handleRefreshRecentUploads}
           />
         ) : null}
 

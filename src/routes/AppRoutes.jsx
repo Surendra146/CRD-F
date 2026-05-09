@@ -1,8 +1,10 @@
 import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 
-import MainLayout from '../components/Layout/mainLayout';
+import MainLayout from '../components/layout/MainLayout';
 import { ModuleRoute, ProtectedRoute, PublicRoute, RoleRoute } from './RouteGuards';
+import { useAuthStore } from '../store/authstore';
+import { resolveDefaultRoute } from '../utils/defaultRoute';
 
 const Login = lazy(() => import('../Pages/Login'));
 const Register = lazy(() => import('../Pages/Register'));
@@ -14,8 +16,10 @@ const CustomerDetail = lazy(() => import('../Pages/CLC/CustomerDetail'));
 const Analytics = lazy(() => import('../Pages/CLC/Analytics'));
 const Import = lazy(() => import('../Pages/CLC/Import'));
 const Campaigns = lazy(() => import('../Pages/CLC/Campaigns'));
+const SegmentsModule = lazy(() => import('../Pages/CLC/SegmentsModule'));
 const WhatsApp = lazy(() => import('../Pages/CLC/WhatsApp'));
 const Templates = lazy(() => import('../Pages/CLC/Templates'));
+const CustomerSegmentImport = lazy(() => import('../Pages/CLC/CustomerSegmentImport'));
 const Settings = lazy(() => import('../Pages/CLC/Settings'));
 const Roles = lazy(() => import('../Pages/Roles'));
 const Users = lazy(() => import('../Pages/Users'));
@@ -26,7 +30,7 @@ const CustomDashboardBuilder = lazy(() => import('../Pages/CustomDashboards/Dash
 
 function RouteFallback() {
   return (
-    <div className="flex min-h-[40vh] items-center justify-center px-6">
+    <div className="flex min-h-screen items-center justify-center px-6">
       <div className="rounded-xl border border-gray-200 bg-white px-6 py-4 text-sm text-gray-600 shadow-sm">
         Loading page...
       </div>
@@ -38,235 +42,49 @@ function PageLoader({ children }) {
   return <Suspense fallback={<RouteFallback />}>{children}</Suspense>;
 }
 
+function DefaultRouteRedirect() {
+  const { user } = useAuthStore();
+  return <Navigate to={resolveDefaultRoute(user)} replace />;
+}
+
 export default function AppRoutes() {
   return (
     <Routes>
-      <Route
-        path="/login"
-        element={
-          <PublicRoute>
-            <PageLoader>
-              <Login />
-            </PageLoader>
-          </PublicRoute>
-        }
-      />
-      <Route
-        path="/register"
-        element={
-          <PublicRoute>
-            <PageLoader>
-              <Register />
-            </PageLoader>
-          </PublicRoute>
-        }
-      />
-      <Route
-        element={
-          <ProtectedRoute>
-            <MainLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route
-          path="/dashboard"
-          element={
-            <PageLoader>
-              <ModuleRoute moduleKey="dashboard">
-                <Dashboard />
-              </ModuleRoute>
-            </PageLoader>
-          }
-        />
-        <Route
-          path="/customers"
-          element={<Navigate to="/customers/details" replace />}
-        />
-        <Route
-          path="/customers/details"
-          element={
-            <PageLoader>
-              <ModuleRoute moduleKey="customers">
-                <CustomerDetails />
-              </ModuleRoute>
-            </PageLoader>
-          }
-        />
-        <Route
-          path="/customers/sales"
-          element={
-            <PageLoader>
-              <ModuleRoute moduleKey="customers">
-                <CustomerSales />
-              </ModuleRoute>
-            </PageLoader>
-          }
-        />
-        <Route
-          path="/customers/new"
-          element={
-            <PageLoader>
-              <ModuleRoute moduleKey="customers">
-                <RoleRoute allowedRoles={['manager']}>
-                  <CustomerCreate />
-                </RoleRoute>
-              </ModuleRoute>
-            </PageLoader>
-          }
-        />
-        <Route
-          path="/customers/:id"
-          element={
-            <PageLoader>
-              <ModuleRoute moduleKey="customers">
-                <CustomerDetail />
-              </ModuleRoute>
-            </PageLoader>
-          }
-        />
-        <Route
-          path="/customers/:id/edit"
-          element={
-            <PageLoader>
-              <ModuleRoute moduleKey="customers">
-                <RoleRoute allowedRoles={['manager']}>
-                  <CustomerCreate />
-                </RoleRoute>
-              </ModuleRoute>
-            </PageLoader>
-          }
-        />
-        <Route
-          path="/analytics"
-          element={
-            <PageLoader>
-              <ModuleRoute moduleKey="analytics">
-                <Analytics />
-              </ModuleRoute>
-            </PageLoader>
-          }
-        />
-        <Route
-          path="/import"
-          element={
-            <PageLoader>
-              <ModuleRoute moduleKey="import">
-                <RoleRoute allowedRoles={['manager']}>
-                  <Import />
-                </RoleRoute>
-              </ModuleRoute>
-            </PageLoader>
-          }
-        />
-        <Route
-          path="/campaigns"
-          element={
-            <PageLoader>
-              <ModuleRoute moduleKey="campaigns">
-                <Campaigns />
-              </ModuleRoute>
-            </PageLoader>
-          }
-        />
-        <Route
-          path="/whatsapp"
-          element={
-            <PageLoader>
-              <ModuleRoute moduleKey="whatsapp">
-                <RoleRoute allowedRoles={['analyst']}>
-                  <WhatsApp />
-                </RoleRoute>
-              </ModuleRoute>
-            </PageLoader>
-          }
-        />
-        <Route
-          path="/templates"
-          element={
-            <PageLoader>
-              <ModuleRoute moduleKey="templates">
-                <Templates />
-              </ModuleRoute>
-            </PageLoader>
-          }
-        />
-        <Route
-          path="/settings"
-          element={
-            <PageLoader>
-              <ModuleRoute moduleKey="settings">
-                <Settings />
-              </ModuleRoute>
-            </PageLoader>
-          }
-        />
-        <Route
-          path="/roles"
-          element={
-            <PageLoader>
-              <ModuleRoute moduleKey="roles">
-                <RoleRoute allowedRoles={['admin']}>
-                  <Roles />
-                </RoleRoute>
-              </ModuleRoute>
-            </PageLoader>
-          }
-        />
-        <Route
-          path="/users"
-          element={
-            <PageLoader>
-              <ModuleRoute moduleKey="users">
-                <RoleRoute allowedRoles={['admin']}>
-                  <Users />
-                </RoleRoute>
-              </ModuleRoute>
-            </PageLoader>
-          }
-        />
-        <Route
-          path="/dashboards"
-          element={
-            <PageLoader>
-              <ModuleRoute moduleKey="custom-dashboards">
-                <CustomDashboards />
-              </ModuleRoute>
-            </PageLoader>
-          }
-        />
-        <Route
-          path="/dashboards/:id/upload"
-          element={
-            <PageLoader>
-              <ModuleRoute moduleKey="custom-dashboards">
-                <CustomDashboardUpload />
-              </ModuleRoute>
-            </PageLoader>
-          }
-        />
-        <Route
-          path="/dashboards/:id/map-columns"
-          element={
-            <PageLoader>
-              <ModuleRoute moduleKey="custom-dashboards">
-                <CustomDashboardMapping />
-              </ModuleRoute>
-            </PageLoader>
-          }
-        />
-        <Route
-          path="/dashboards/:id"
-          element={
-            <PageLoader>
-              <ModuleRoute moduleKey="custom-dashboards">
-                <CustomDashboardBuilder />
-              </ModuleRoute>
-            </PageLoader>
-          }
-        />
+      <Route path="/login" element={<PublicRoute><PageLoader><Login /></PageLoader></PublicRoute>} />
+      <Route path="/register" element={<PublicRoute><PageLoader><Register /></PageLoader></PublicRoute>} />
+
+      <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
+        <Route path="/dashboard" element={<PageLoader><ModuleRoute moduleKey="dashboard"><Dashboard /></ModuleRoute></PageLoader>} />
+
+        <Route path="/customers" element={<Navigate to="/customers/details" replace />} />
+        <Route path="/customers/details" element={<PageLoader><ModuleRoute moduleKey="customers"><CustomerDetails /></ModuleRoute></PageLoader>} />
+        <Route path="/customers/sales" element={<PageLoader><ModuleRoute moduleKey="customers"><CustomerSales /></ModuleRoute></PageLoader>} />
+        <Route path="/customers/new" element={<PageLoader><ModuleRoute moduleKey="customers"><RoleRoute allowedRoles={['manager']}><CustomerCreate /></RoleRoute></ModuleRoute></PageLoader>} />
+        <Route path="/customers/:id" element={<PageLoader><ModuleRoute moduleKey="customers"><CustomerDetail /></ModuleRoute></PageLoader>} />
+        <Route path="/customers/:id/edit" element={<PageLoader><ModuleRoute moduleKey="customers"><RoleRoute allowedRoles={['manager']}><CustomerCreate /></RoleRoute></ModuleRoute></PageLoader>} />
+
+        <Route path="/analytics" element={<PageLoader><ModuleRoute moduleKey="analytics"><Analytics /></ModuleRoute></PageLoader>} />
+        <Route path="/import" element={<PageLoader><ModuleRoute moduleKey="import"><RoleRoute allowedRoles={['manager']}><Import /></RoleRoute></ModuleRoute></PageLoader>} />
+
+        <Route path="/campaigns" element={<PageLoader><ModuleRoute moduleKey="campaigns"><Campaigns /></ModuleRoute></PageLoader>} />
+        <Route path="/segments" element={<PageLoader><ModuleRoute moduleKey="campaigns"><RoleRoute allowedRoles={['manager']}><SegmentsModule /></RoleRoute></ModuleRoute></PageLoader>} />
+        <Route path="/segments/import" element={<PageLoader><ModuleRoute moduleKey="campaigns"><RoleRoute allowedRoles={['manager']}><CustomerSegmentImport /></RoleRoute></ModuleRoute></PageLoader>} />
+
+        <Route path="/templates" element={<PageLoader><ModuleRoute moduleKey="templates"><Templates /></ModuleRoute></PageLoader>} />
+        <Route path="/whatsapp" element={<PageLoader><ModuleRoute moduleKey="whatsapp"><RoleRoute allowedRoles={['analyst']}><WhatsApp /></RoleRoute></ModuleRoute></PageLoader>} />
+
+        <Route path="/settings" element={<PageLoader><ModuleRoute moduleKey="settings"><Settings /></ModuleRoute></PageLoader>} />
+        <Route path="/roles" element={<PageLoader><ModuleRoute moduleKey="roles"><RoleRoute allowedRoles={['admin']}><Roles /></RoleRoute></ModuleRoute></PageLoader>} />
+        <Route path="/users" element={<PageLoader><ModuleRoute moduleKey="users"><RoleRoute allowedRoles={['admin']}><Users /></RoleRoute></ModuleRoute></PageLoader>} />
+
+        <Route path="/dashboards" element={<PageLoader><ModuleRoute moduleKey="custom-dashboards"><CustomDashboards /></ModuleRoute></PageLoader>} />
+        <Route path="/dashboards/:id/upload" element={<PageLoader><ModuleRoute moduleKey="custom-dashboards"><CustomDashboardUpload /></ModuleRoute></PageLoader>} />
+        <Route path="/dashboards/:id/map-columns" element={<PageLoader><ModuleRoute moduleKey="custom-dashboards"><CustomDashboardMapping /></ModuleRoute></PageLoader>} />
+        <Route path="/dashboards/:id" element={<PageLoader><ModuleRoute moduleKey="custom-dashboards"><CustomDashboardBuilder /></ModuleRoute></PageLoader>} />
       </Route>
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+
+      <Route path="/" element={<DefaultRouteRedirect />} />
+      <Route path="*" element={<DefaultRouteRedirect />} />
     </Routes>
   );
 }

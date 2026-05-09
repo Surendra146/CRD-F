@@ -349,6 +349,132 @@ export default function Templates() {
           </CardContent>
         </Card>
       </div>
+
+      <Modal
+        isOpen={showCreateModal}
+        onClose={() => {
+          if (createTemplateMutation.isPending || updateTemplateMutation.isPending) return;
+          resetForm();
+        }}
+        title={editingTemplateId ? 'Edit Template' : 'Create Template'}
+      >
+        <form className="space-y-4" onSubmit={submitTemplate}>
+          <Input
+            label="Template Name *"
+            value={form.name}
+            onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
+          />
+
+          <Select
+            label="Category"
+            value={form.category}
+            onChange={(event) => setForm((prev) => ({ ...prev, category: event.target.value }))}
+            options={categoryOptions.map((item) => ({
+              label: item.replace(/_/g, ' '),
+              value: item,
+            }))}
+          />
+
+          <Input
+            label="WhatsApp Template Name"
+            value={form.whatsappTemplateName}
+            onChange={(event) =>
+              setForm((prev) => ({ ...prev, whatsappTemplateName: event.target.value }))
+            }
+          />
+
+          <Select
+            label="Header Type"
+            value={form.headerType}
+            onChange={(event) => setForm((prev) => ({ ...prev, headerType: event.target.value }))}
+            options={[
+              { label: 'None', value: 'none' },
+              { label: 'Text', value: 'text' },
+            ]}
+          />
+
+          {form.headerType === 'text' ? (
+            <Input
+              label="Header Text"
+              value={form.headerText}
+              onChange={(event) => setForm((prev) => ({ ...prev, headerText: event.target.value }))}
+            />
+          ) : null}
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-gray-700">Template Body *</label>
+            <textarea
+              rows={4}
+              value={form.body}
+              onChange={(event) => setForm((prev) => ({ ...prev, body: event.target.value }))}
+              className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+          </div>
+
+          <Input
+            label="Footer"
+            value={form.footer}
+            onChange={(event) => setForm((prev) => ({ ...prev, footer: event.target.value }))}
+          />
+
+          <div>
+            <p className="mb-2 text-sm font-medium text-gray-700">Statuses</p>
+            <div className="grid grid-cols-2 gap-2">
+              {statusOptions.map((status) => (
+                <label key={status} className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={form.statuses.includes(status)}
+                    onChange={() => toggleMulti('statuses', status)}
+                  />
+                  <span className="capitalize">{status.replace(/_/g, ' ')}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-2 text-sm font-medium text-gray-700">Lifecycle Segments</p>
+            <div className="grid grid-cols-2 gap-2">
+              {savedSegments.map((segment) => (
+                <label key={segment._id} className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={form.segments.includes(segment._id)}
+                    onChange={() => toggleMulti('segments', segment._id)}
+                  />
+                  <span>{segment.name}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Input
+              label="Min Days Since Last Purchase"
+              type="number"
+              value={form.minDaysSinceLastPurchase}
+              onChange={(event) =>
+                setForm((prev) => ({ ...prev, minDaysSinceLastPurchase: event.target.value }))
+              }
+            />
+            <Input
+              label="Max Days Since Last Purchase"
+              type="number"
+              value={form.maxDaysSinceLastPurchase}
+              onChange={(event) =>
+                setForm((prev) => ({ ...prev, maxDaysSinceLastPurchase: event.target.value }))
+              }
+            />
+          </div>
+
+          <div className="flex justify-end">
+            <Button type="submit" isLoading={createTemplateMutation.isPending || updateTemplateMutation.isPending}>
+              {editingTemplateId ? 'Update Template' : 'Create Template'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

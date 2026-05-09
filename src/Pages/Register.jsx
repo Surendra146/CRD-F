@@ -7,6 +7,7 @@ import Input from '../components/UI/input';
 import { useAuthStore } from '../store/authstore';
 import { authFormSchemas } from '../config/formSchemas';
 import { validateBySchema } from '../utils/formValidation';
+import { resolveDefaultRoute } from '../utils/defaultRoute';
 
 export default function Register() {
   const navigate = useNavigate();
@@ -49,7 +50,7 @@ export default function Register() {
         setOtpStep(true);
       } else {
         toast.success(result.message || 'Registration successful!');
-        navigate('/dashboard');
+        navigate(resolveDefaultRoute(useAuthStore.getState().user));
       }
     } else {
       toast.error(result.message);
@@ -73,7 +74,7 @@ export default function Register() {
 
     if (result.success) {
       toast.success('Registration completed successfully!');
-      navigate('/dashboard');
+      navigate(resolveDefaultRoute(useAuthStore.getState().user));
     } else {
       toast.error(result.message);
     }

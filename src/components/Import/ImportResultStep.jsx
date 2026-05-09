@@ -6,6 +6,7 @@ import {
   Save,
   XCircle,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 import Button from '../UI/button';
 import { Card, CardContent } from '../UI/card.jsx';
@@ -68,6 +69,7 @@ export default function ImportResultStep({
   isSaving,
   onExportErrors,
 }) {
+  const navigate = useNavigate();
   const status = processingStatus.status;
 
   const isValidationDone = ['validated', 'validated_with_errors'].includes(status);
@@ -190,7 +192,7 @@ export default function ImportResultStep({
           ) : null}
 
           {isCompleted ? (
-            <Button onClick={() => window.location.assign('/customers')}>
+            <Button onClick={() => navigate('/customers/details')}>
               View Customers
             </Button>
           ) : null}

@@ -10,7 +10,7 @@ import {
   ShoppingBag,
   UserRound,
 } from 'lucide-react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 
 import Header from '../../components/Layout/Header.jsx';
 import Badge from '../../components/UI/badge.jsx';
@@ -59,8 +59,17 @@ function normalizeTimeline(payload) {
   return payload?.data?.data || payload?.data?.timeline || payload?.data || payload || [];
 }
 
+function getLatestPurchase(purchases = []) {
+  if (!Array.isArray(purchases) || purchases.length === 0) return null;
+
+  return [...purchases].sort((a, b) => new Date(b?.date || 0) - new Date(a?.date || 0))[0];
+}
+
 export default function CustomerDetail() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const isSalesModule = searchParams.get('moduleType') === 'customer_sales';
+  const backPath = isSalesModule ? '/customers/sales' : '/customers/details';
 
   const customerQuery = useQuery({
     queryKey: ['customer', id],
@@ -95,7 +104,7 @@ export default function CustomerDetail() {
           <Card>
             <CardContent className="space-y-4 py-10 text-center">
               <p className="text-red-500">Unable to load this customer.</p>
-              <Link to="/customers">
+              <Link to={backPath}>
                 <Button variant="outline">
                   <ArrowLeft className="mr-2 h-4 w-4" />
                   Back to Customers
@@ -112,6 +121,7 @@ export default function CustomerDetail() {
   const demographics = customer.demographics || {};
   const location = demographics.location || {};
   const interactions = customer.interactions || [];
+  const latestPurchase = getLatestPurchase(customer.purchases);
 
   const stats = [
     {
@@ -142,7 +152,7 @@ export default function CustomerDetail() {
         title={customer.name || 'Customer Detail'}
         subtitle={`Customer ID: ${id}`}
         actions={
-          <Link to="/customers">
+          <Link to={backPath}>
             <Button variant="outline">
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back
@@ -169,7 +179,10 @@ export default function CustomerDetail() {
                   Segment: {(lifecycle.segment || 'unassigned').replace(/_/g, ' ')}
                 </p>
                 <p className="mt-1 text-sm text-gray-500">
-                  Created {safeDate(customer.createdAt, 'Unknown creation date')}
+                  Data Uploaded Date: {safeDate(customer.source?.importedAt || customer.createdAt, 'Not available')}
+                </p>
+                <p className="mt-1 text-sm text-gray-500">
+                  Customer Created Date: {safeDate(customer.customerCreatedDate, 'Not available')}
                 </p>
               </div>
             </div>
@@ -186,7 +199,14 @@ export default function CustomerDetail() {
               <div className="flex items-center gap-3 rounded-lg border border-gray-200 px-4 py-3 sm:col-span-2">
                 <MapPin className="h-4 w-4 text-gray-400" />
                 <span className="text-sm text-gray-700">
-                  {[location.city, location.state, location.country].filter(Boolean).join(', ') || 'No location on file'}
+                  {[
+                    location.locationName,
+                    location.city,
+                    location.state,
+                    location.country,
+                  ]
+                    .filter(Boolean)
+                    .join(', ') || 'No location on file'}
                 </span>
               </div>
             </div>
@@ -212,27 +232,68 @@ export default function CustomerDetail() {
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
           <Card className="xl:col-span-1">
             <CardHeader>
-              <CardTitle>Profile</CardTitle>
+              <CardTitle>{isSalesModule ? 'Sales Profile' : 'Profile'}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <p className="text-xs uppercase tracking-wide text-gray-400">Age</p>
-                <p className="mt-1 text-sm text-gray-800">{demographics.age || 'Not provided'}</p>
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-wide text-gray-400">Gender</p>
-                <p className="mt-1 text-sm text-gray-800">{demographics.gender || 'Not provided'}</p>
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-wide text-gray-400">Customer Type</p>
-                <p className="mt-1 text-sm text-gray-800">{demographics.customerType || 'Not provided'}</p>
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-wide text-gray-400">Average Order Value</p>
-                <p className="mt-1 text-sm text-gray-800">
-                  {formatCurrency(lifecycle.avgOrderValue || 0)}
-                </p>
-              </div>
+              {isSalesModule ? (
+                <>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-gray-400">Order ID</p>
+                    <p className="mt-1 text-sm text-gray-800">{latestPurchase?.orderId || 'Not provided'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-gray-400">POS No</p>
+                    <p className="mt-1 text-sm text-gray-800">
+                      {latestPurchase?.posNo || location.posNo || 'Not provided'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-gray-400">Sale Date</p>
+                    <p className="mt-1 text-sm text-gray-800">
+                      {safeDate(latestPurchase?.date, 'Not provided')}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-gray-400">Sale Amount</p>
+                    <p className="mt-1 text-sm text-gray-800">
+                      {formatCurrency(latestPurchase?.amount || 0)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-gray-400">Unit Price</p>
+                    <p className="mt-1 text-sm text-gray-800">
+                      {formatCurrency(latestPurchase?.items?.[0]?.price || 0)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-gray-400">Payment Method</p>
+                    <p className="mt-1 text-sm text-gray-800">
+                      {latestPurchase?.paymentMethod || 'Not provided'}
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-gray-400">Age</p>
+                    <p className="mt-1 text-sm text-gray-800">{demographics.age || 'Not provided'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-gray-400">Gender</p>
+                    <p className="mt-1 text-sm text-gray-800">{demographics.gender || 'Not provided'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-gray-400">Customer Type</p>
+                    <p className="mt-1 text-sm text-gray-800">{demographics.customerType || 'Not provided'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-gray-400">Average Order Value</p>
+                    <p className="mt-1 text-sm text-gray-800">
+                      {formatCurrency(lifecycle.avgOrderValue || 0)}
+                    </p>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
 

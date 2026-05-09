@@ -1,6 +1,7 @@
 import { FileSpreadsheet } from 'lucide-react';
 
 import Badge from '../UI/badge';
+import Button from '../UI/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../UI/card.jsx';
 import Loader from '../UI/loader';
 import Select from '../UI/select';
@@ -13,10 +14,14 @@ export default function ImportUploadStep({
   isDragActive,
   isUploading,
   historyData,
+  isRecentUploadsCleared,
   maxFileSizeMb,
   importType,
   onImportTypeChange,
+  onRefreshRecentUploads,
 }) {
+  const recentUploads = isRecentUploadsCleared ? [] : historyData?.data || [];
+
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       <div className="lg:col-span-2">
@@ -68,13 +73,16 @@ export default function ImportUploadStep({
 
       <div>
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Recent Uploads</CardTitle>
+            <Button type="button" variant="outline" size="sm" onClick={onRefreshRecentUploads}>
+              Refresh
+            </Button>
           </CardHeader>
           <CardContent className="p-0">
-            {historyData?.data?.length ? (
+            {recentUploads.length ? (
               <div className="divide-y">
-                {historyData.data.map((upload) => (
+                {recentUploads.map((upload) => (
                   <div key={upload._id} className="px-6 py-3">
                     <div className="flex items-center justify-between gap-3">
                       <p className="truncate text-sm font-medium">{upload.file.originalName}</p>

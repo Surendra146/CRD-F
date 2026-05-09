@@ -2,22 +2,29 @@ import { Navigate } from 'react-router-dom';
 
 import { useAuthStore } from '../store/authstore';
 import { hasRoleAccess } from '../utils/rbac';
+import { resolveDefaultRoute } from '../utils/defaultRoute';
+import { normalizeAllowedModules } from '../utils/moduleAccess';
 
 export function ProtectedRoute({ children }) {
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
+  const allowedModules = normalizeAllowedModules(user?.allowedModules);
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (window.location.pathname === '/dashboard' && allowedModules.length && !allowedModules.includes('dashboard')) {
+    return <Navigate to={resolveDefaultRoute(user)} replace />;
   }
 
   return children;
 }
 
 export function PublicRoute({ children }) {
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
 
   if (isAuthenticated) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={resolveDefaultRoute(user)} replace />;
   }
 
   return children;
@@ -31,7 +38,7 @@ export function RoleRoute({ children, allowedRoles = [] }) {
   }
 
   if (allowedRoles.length && !hasRoleAccess(user?.role, allowedRoles)) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={resolveDefaultRoute(user)} replace />;
   }
 
   return children;
@@ -39,6 +46,7 @@ export function RoleRoute({ children, allowedRoles = [] }) {
 
 export function ModuleRoute({ children, moduleKey }) {
   const { isAuthenticated, user } = useAuthStore();
+  const allowedModules = normalizeAllowedModules(user?.allowedModules);
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -46,11 +54,10 @@ export function ModuleRoute({ children, moduleKey }) {
 
   if (
     moduleKey &&
-    Array.isArray(user?.allowedModules) &&
-    user.allowedModules.length &&
-    !user.allowedModules.includes(moduleKey)
+    allowedModules.length &&
+    !allowedModules.includes(moduleKey)
   ) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={resolveDefaultRoute(user)} replace />;
   }
 
   return children;

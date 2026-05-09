@@ -72,10 +72,11 @@ export const excelApi = {
   /* =========================
      HISTORY
   ========================= */
-  getHistory: async () => {
+  getHistory: async (params = {}) => {
     return apiWrapper({
       url: `${EXCEL_URL}/history`,
       method: 'GET',
+      params,
     });
   },
 };

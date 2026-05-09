@@ -397,7 +397,7 @@ export default function Customers({ moduleType = 'customer_details' }) {
 
                       <TableCell>
                         <div className="relative flex items-center justify-end gap-2">
-                          <Link to={`/customers/${customer._id}`}>
+                          <Link to={`/customers/${customer._id}?moduleType=${moduleType}`}>
                             <Button variant="ghost" size="sm">
                               <Eye className="h-4 w-4" />
                             </Button>
@@ -426,7 +426,7 @@ export default function Customers({ moduleType = 'customer_details' }) {
                           {activeMenuId === customer._id ? (
                             <div className="absolute right-0 top-11 z-20 w-48 rounded-xl border border-gray-200 bg-white p-2 shadow-lg">
                               <Link
-                                to={`/customers/${customer._id}`}
+                                to={`/customers/${customer._id}?moduleType=${moduleType}`}
                                 className="block rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
                                 onClick={() => setActiveMenuId(null)}
                               >
@@ -441,14 +441,16 @@ export default function Customers({ moduleType = 'customer_details' }) {
                                 Add comment
                               </button>
 
-                              <Link
-                                to={`/customers/${customer._id}/edit`}
-                                className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                                onClick={() => setActiveMenuId(null)}
-                              >
-                                <Edit className="h-4 w-4" />
-                                Edit customer
-                              </Link>
+                              {!isSalesModule ? (
+                                <Link
+                                  to={`/customers/${customer._id}/edit?moduleType=${moduleType}`}
+                                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                  onClick={() => setActiveMenuId(null)}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                  Edit customer
+                                </Link>
+                              ) : null}
                             </div>
                           ) : null}
                         </div>

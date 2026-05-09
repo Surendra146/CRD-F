@@ -13,6 +13,7 @@ import { getEnabledSidebarModules } from '../config/sidebarModules';
 import { authApi } from '../services/auth';
 import { formatApiError } from '../config';
 import { hasRoleAccess } from '../utils/rbac';
+import { moduleAccessKey } from '../utils/moduleAccess';
 
 const baseRoleOptions = [
   { value: 'viewer', label: 'Viewer' },
@@ -24,6 +25,34 @@ const baseRoleOptions = [
 export default function Roles() {
   const queryClient = useQueryClient();
   const allModules = useMemo(() => getEnabledSidebarModules(), []);
+  const assignableModules = useMemo(() => {
+    const items = [];
+
+    allModules.forEach((module) => {
+      const children = Array.isArray(module.children) ? module.children : [];
+
+      if (children.length) {
+        children.forEach((child) => {
+          items.push({
+            key: moduleAccessKey(child),
+            label: child.label,
+            roles: child.roles,
+          });
+        });
+        return;
+      }
+
+      items.push({
+        key: moduleAccessKey(module),
+        label: module.label,
+        roles: module.roles,
+      });
+    });
+
+    return items.filter(
+      (item, index) => item.key && items.findIndex((candidate) => candidate.key === item.key) === index
+    );
+  }, [allModules]);
   const [form, setForm] = useState({
     name: '',
     baseRole: 'viewer',
@@ -38,17 +67,17 @@ export default function Roles() {
 
   const moduleOptions = useMemo(
     () =>
-      allModules
+      assignableModules
         .filter((module) => hasRoleAccess(form.baseRole, module.roles))
         .map((module) => ({ value: module.key, label: module.label })),
-    [allModules, form.baseRole]
+    [assignableModules, form.baseRole]
   );
   const editModuleOptions = useMemo(
     () =>
-      allModules
+      assignableModules
         .filter((module) => hasRoleAccess(editForm.baseRole, module.roles))
         .map((module) => ({ value: module.key, label: module.label })),
-    [allModules, editForm.baseRole]
+    [assignableModules, editForm.baseRole]
   );
 
   const { data, isLoading } = useQuery({
@@ -96,7 +125,7 @@ export default function Roles() {
   };
 
   const resetModulesForBaseRole = (nextBaseRole, previousModules) => {
-    const nextAllowedModules = allModules
+    const nextAllowedModules = assignableModules
       .filter((module) => hasRoleAccess(nextBaseRole, module.roles))
       .map((module) => module.key);
 

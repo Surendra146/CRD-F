@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   Gift,
@@ -29,6 +29,8 @@ import {
 } from '../../components/UI/table.jsx';
 import { communicationsApi } from '../../services/communications.js';
 import { customersApi } from '../../services/customers.js';
+import { segmentsApi } from '../../services/segments.js';
+import { templatesApi } from '../../services/templates.js';
 import {
   formatApiError,
   whatsappGraphVersion,
@@ -37,23 +39,6 @@ import {
   whatsappSendPath,
 } from '../../services/api';
 import { formatCurrency, formatNumber, formatRelativeTime } from '../../utils/format.js';
-
-const templateOptions = [
-  { value: 'offer', label: 'Special Offer' },
-  { value: 'rating', label: 'Ask for Rating' },
-  { value: 'followup', label: 'Follow-up Message' },
-];
-
-const segmentOptions = [
-  { value: '', label: 'All Segments' },
-  { value: 'champions', label: 'Champions' },
-  { value: 'loyal_customers', label: 'Loyal Customers' },
-  { value: 'potential_loyalist', label: 'Potential Loyalist' },
-  { value: 'new_customers', label: 'New Customers' },
-  { value: 'at_risk', label: 'At Risk' },
-  { value: 'hibernating', label: 'Hibernating' },
-  { value: 'lost', label: 'Lost' },
-];
 
 function normalizeCustomers(payload) {
   const customers =
@@ -113,10 +98,20 @@ function buildTemplateParameters(type, customer) {
   return [customerName];
 }
 
+function personalizeMessage(templateMessage, customer) {
+  const name = customer?.name || 'Customer';
+  const discount = formatCurrency(customer?.lifecycle?.avgOrderValue || 500);
+
+  return String(templateMessage || '')
+    .replace(/\{\{\s*name\s*\}\}/gi, name)
+    .replace(/\{\{\s*customer_name\s*\}\}/gi, name)
+    .replace(/\{\{\s*discount\s*\}\}/gi, discount);
+}
+
 export default function WhatsApp() {
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [selectedSegment, setSelectedSegment] = useState('');
-  const [templateType, setTemplateType] = useState('offer');
+  const [templateType, setTemplateType] = useState('');
   const [message, setMessage] = useState('');
   const [lastDelivery, setLastDelivery] = useState(null);
 
@@ -129,8 +124,32 @@ export default function WhatsApp() {
         sortOrder: 'desc',
       }),
   });
+  const templatesQuery = useQuery({
+    queryKey: ['templates'],
+    queryFn: () => templatesApi.getAll(),
+  });
+  const segmentsQuery = useQuery({
+    queryKey: ['segments'],
+    queryFn: () => segmentsApi.getAll(),
+  });
 
   const customers = useMemo(() => normalizeCustomers(data), [data]);
+  const templates = useMemo(() => {
+    const list =
+      templatesQuery.data?.data ||
+      templatesQuery.data?.items ||
+      templatesQuery.data ||
+      [];
+    return Array.isArray(list) ? list : [];
+  }, [templatesQuery.data]);
+  const savedSegments = useMemo(() => {
+    const list =
+      segmentsQuery.data?.data ||
+      segmentsQuery.data?.items ||
+      segmentsQuery.data ||
+      [];
+    return Array.isArray(list) ? list : [];
+  }, [segmentsQuery.data]);
 
   const reachableCustomers = useMemo(
     () =>
@@ -139,6 +158,43 @@ export default function WhatsApp() {
       ),
     [customers]
   );
+  const segmentOptions = useMemo(() => {
+    const uniqueSegments = [
+      ...new Set(
+        savedSegments
+          .flatMap((segment) => (Array.isArray(segment?.filters?.segments) ? segment.filters.segments : []))
+          .filter(Boolean)
+      ),
+    ];
+
+    return [
+      { value: '', label: 'All Segments' },
+      ...uniqueSegments.map((segment) => ({
+        value: segment,
+        label: String(segment).replace(/_/g, ' '),
+      })),
+    ];
+  }, [savedSegments]);
+
+  const templateOptions = useMemo(
+    () =>
+      templates.map((template) => ({
+        value: template._id,
+        label: template.name || template.whatsappTemplateName || 'Template',
+      })),
+    [templates]
+  );
+
+  const selectedTemplate = useMemo(
+    () => templates.find((template) => template._id === templateType) || null,
+    [templates, templateType]
+  );
+
+  useEffect(() => {
+    if (!templateType && templates.length) {
+      setTemplateType(templates[0]._id);
+    }
+  }, [templateType, templates]);
 
   const filteredCustomers = useMemo(() => {
     if (!selectedSegment) return reachableCustomers;
@@ -169,8 +225,8 @@ export default function WhatsApp() {
         provider: whatsappProvider,
         graphVersion: whatsappGraphVersion,
         phoneNumberId: whatsappPhoneNumberId || undefined,
-        templateType,
-        templateParameters: buildTemplateParameters(templateType, customer),
+        templateType: selectedTemplate?.category || 'custom',
+        templateParameters: buildTemplateParameters(selectedTemplate?.category, customer),
         preferredLanguage: customer.preferences?.language || 'en',
         channel: 'whatsapp',
         message: outgoingMessage,
@@ -214,13 +270,21 @@ export default function WhatsApp() {
   });
 
   const applyTemplate = () => {
-    const nextMessage = buildTemplateMessage(templateType, selectedCustomer);
+    const nextMessage =
+      selectedTemplate?.content?.body ||
+      buildTemplateMessage(selectedTemplate?.category, selectedCustomer);
     setMessage(nextMessage);
     toast.success('Message template applied');
   };
 
-  const resolveOutgoingMessage = (customer) =>
-    message.trim() || buildTemplateMessage(templateType, customer);
+  const resolveOutgoingMessage = (customer) => {
+    const rawMessage =
+      message.trim() ||
+      selectedTemplate?.content?.body ||
+      buildTemplateMessage(selectedTemplate?.category, customer);
+
+    return personalizeMessage(rawMessage, customer);
+  };
 
   const handleOpenWhatsApp = (customer = selectedCustomer) => {
     if (!customer) {
@@ -275,28 +339,40 @@ export default function WhatsApp() {
     });
   };
 
-  const quickTemplates = [
-    {
-      key: 'offer',
-      label: 'Offer Blast',
-      icon: Gift,
-      description: 'Promote discounts and limited-time deals',
-    },
-    {
-      key: 'rating',
-      label: 'Rating Request',
-      icon: Star,
-      description: 'Ask customers for a product or service rating',
-    },
-    {
-      key: 'followup',
-      label: 'Re-engagement',
-      icon: MessageSquareQuote,
-      description: 'Reconnect with customers who have gone quiet',
-    },
-  ];
+  const quickTemplates = useMemo(() => {
+    const categoryIconMap = {
+      loyalty: Gift,
+      rating_request: Star,
+      feedback: MessageSquareQuote,
+      win_back: Sparkles,
+      complaint: MessageCircle,
+      custom: MessageCircle,
+    };
 
-  if (isLoading) {
+    const categoryDescriptionMap = {
+      loyalty: 'Promote discounts and loyalty deals',
+      rating_request: 'Ask customers for a product or service rating',
+      feedback: 'Collect customer feedback quickly',
+      win_back: 'Reconnect with customers who have gone quiet',
+      complaint: 'Follow up on customer complaints',
+      custom: 'General communication template',
+    };
+
+    return templates.map((template) => {
+      const category = template.category || 'custom';
+
+      return {
+        key: template._id,
+        category,
+        label: template.name || String(category).replace(/_/g, ' '),
+        icon: categoryIconMap[category] || MessageCircle,
+        description:
+          categoryDescriptionMap[category] || 'Use this template for customer communication',
+      };
+    });
+  }, [templates]);
+
+  if (isLoading || templatesQuery.isLoading || segmentsQuery.isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader size="lg" />
@@ -335,7 +411,7 @@ export default function WhatsApp() {
               <div>
                 <p className="text-sm text-gray-500">Selected Template</p>
                 <p className="mt-2 text-2xl font-semibold capitalize text-gray-900">
-                  {templateType}
+                  {selectedTemplate?.name || 'No template selected'}
                 </p>
               </div>
               <Sparkles className="h-6 w-6 text-primary-600" />
@@ -387,9 +463,12 @@ export default function WhatsApp() {
                     const nextTemplateType = e.target.value;
                     setTemplateType(nextTemplateType);
 
-                    if (selectedCustomer) {
-                      setMessage(buildTemplateMessage(nextTemplateType, selectedCustomer));
-                    }
+                    const nextTemplate =
+                      templates.find((template) => template._id === nextTemplateType) || null;
+                    setMessage(
+                      nextTemplate?.content?.body ||
+                        buildTemplateMessage(nextTemplate?.category, selectedCustomer)
+                    );
                   }}
                 />
 
@@ -406,7 +485,10 @@ export default function WhatsApp() {
                         (customer) => customer._id === nextCustomerId
                       ) || null;
 
-                    setMessage(buildTemplateMessage(templateType, nextCustomer));
+                    setMessage(
+                      selectedTemplate?.content?.body ||
+                        buildTemplateMessage(selectedTemplate?.category, nextCustomer)
+                    );
                   }}
                   placeholder="Choose customer"
                 />
@@ -552,8 +634,16 @@ export default function WhatsApp() {
                     type="button"
                     className="w-full rounded-xl border border-gray-200 p-4 text-left transition-colors hover:border-primary-300 hover:bg-primary-50"
                     onClick={() => {
-                      setTemplateType(template.key);
-                      setMessage(buildTemplateMessage(template.key, selectedCustomer));
+                      const matchedTemplate = templates.find(
+                        (item) => item._id === template.key
+                      );
+                      if (!matchedTemplate?._id) return;
+
+                      setTemplateType(matchedTemplate._id);
+                      setMessage(
+                        matchedTemplate?.content?.body ||
+                          buildTemplateMessage(matchedTemplate.category, selectedCustomer)
+                      );
                     }}
                   >
                     <div className="flex items-center gap-3">
@@ -642,7 +732,10 @@ export default function WhatsApp() {
                           size="sm"
                           onClick={() => {
                             setSelectedCustomerId(customer._id);
-                            setMessage(buildTemplateMessage(templateType, customer));
+                            setMessage(
+                              selectedTemplate?.content?.body ||
+                                buildTemplateMessage(selectedTemplate?.category, customer)
+                            );
                             handleSendViaApi(customer);
                           }}
                         >
