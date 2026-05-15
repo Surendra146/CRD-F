@@ -23,6 +23,8 @@ export default function CustomerSegmentImport() {
   const queryClient = useQueryClient();
   const [selectedFile, setSelectedFile] = useState(null);
   const [validationResult, setValidationResult] = useState(null);
+  const [saveSummary, setSaveSummary] = useState(null);
+  const [fileInputKey, setFileInputKey] = useState(0);
 
   const generateTemplateMutation = useMutation({
     mutationFn: () => segmentsApi.downloadImportTemplate(),
@@ -47,9 +49,21 @@ export default function CustomerSegmentImport() {
     mutationFn: (validRows) => segmentsApi.saveValidatedRows(validRows),
     onSuccess: (response) => {
       const savedRows = response?.data?.savedRows || 0;
-      toast.success(`Saved ${savedRows} rows successfully`);
+      const totalRows = validationResult?.totalRows || 0;
+      const errorCount = validationResult?.errorCount || 0;
+      toast.success(
+        `Customer-Segment mapping saved successfully. Saved ${savedRows} valid row(s). ${
+          errorCount > 0 ? `${errorCount} row(s) failed validation.` : `All ${totalRows} row(s) were valid.`
+        }`
+      );
       queryClient.invalidateQueries({ queryKey: ['customers'] });
       queryClient.invalidateQueries({ queryKey: ['analytics-segments'] });
+
+      // Reset to a fresh upload state after successful save
+      setSelectedFile(null);
+      setValidationResult(null);
+      setSaveSummary(null);
+      setFileInputKey((prev) => prev + 1);
     },
     onError: (error) => {
       toast.error(error?.response?.data?.message || 'Save failed');
@@ -79,6 +93,21 @@ export default function CustomerSegmentImport() {
     ? validationResult.errors.slice(0, MAX_ERROR_ROWS)
     : [];
 
+  const handleExportErrors = async () => {
+    const errors = Array.isArray(validationResult?.errors) ? validationResult.errors : [];
+    if (!errors.length) {
+      toast.error('No invalid rows available to export');
+      return;
+    }
+
+    try {
+      await segmentsApi.exportImportErrors(errors);
+      toast.success('Error list exported successfully');
+    } catch (error) {
+      toast.error(error?.response?.data?.message || 'Failed to export error list');
+    }
+  };
+
   return (
     <div>
       <Header
@@ -104,12 +133,14 @@ export default function CustomerSegmentImport() {
               </Button>
 
               <input
+                key={fileInputKey}
                 type="file"
                 accept=".xlsx,.xls,.csv"
                 onChange={(event) => {
                   const file = event.target.files?.[0] || null;
                   setSelectedFile(file);
                   setValidationResult(null);
+                  setSaveSummary(null);
                 }}
                 className="max-w-sm rounded-lg border border-gray-300 px-3 py-2 text-sm"
               />
@@ -171,10 +202,38 @@ export default function CustomerSegmentImport() {
           </Card>
         ) : null}
 
+        {saveSummary ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Save Summary</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <div className="rounded-lg border border-gray-200 p-4">
+                <p className="text-xs uppercase tracking-wide text-gray-400">Total Rows</p>
+                <p className="mt-1 text-xl font-semibold text-gray-900">{saveSummary.totalRows || 0}</p>
+              </div>
+              <div className="rounded-lg border border-green-200 bg-green-50 p-4">
+                <p className="text-xs uppercase tracking-wide text-green-700">Saved Rows</p>
+                <p className="mt-1 text-xl font-semibold text-green-800">{saveSummary.savedRows || 0}</p>
+              </div>
+              <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+                <p className="text-xs uppercase tracking-wide text-red-700">Failed Rows</p>
+                <p className="mt-1 text-xl font-semibold text-red-800">{saveSummary.failedRows || 0}</p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
+
         {errorRows.length ? (
           <Card>
             <CardHeader>
-              <CardTitle>Error List</CardTitle>
+              <div className="flex items-center justify-between gap-3">
+                <CardTitle>Error List</CardTitle>
+                <Button type="button" variant="outline" onClick={handleExportErrors}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Export Error List
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               <Table>

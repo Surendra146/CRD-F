@@ -7,12 +7,37 @@ import { toast } from 'sonner';
 import { formatApiError } from '../../services/api';
 import { excelApi } from '../../services/excel';
 import Button from '../../components/UI/button';
+import useDashboardUploadProgress from '../../hooks/useDashboardUploadProgress';
 
 const ExcelUpload = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { currentDashboard, fetchDashboard } = useDashboard();
   const [uploading, setUploading] = useState(false);
+  const [jobStatusBySource, setJobStatusBySource] = useState({});
+
+  const { socketState, subscribeToJob, clearActiveJob } = useDashboardUploadProgress({
+    onProgress: async (payload) => {
+      if (!payload?.sourceName) return;
+
+      setJobStatusBySource((prev) => ({
+        ...prev,
+        [payload.sourceName]: payload
+      }));
+
+      if (payload.status === 'completed') {
+        toast.success(`${payload.sourceName} processed successfully`);
+        await fetchDashboard(id);
+        clearActiveJob();
+      }
+
+      if (payload.status === 'failed') {
+        toast.error(payload.errorMessage || `${payload.sourceName} processing failed`);
+        await fetchDashboard(id);
+        clearActiveJob();
+      }
+    }
+  });
 
   useEffect(() => {
     if (id) fetchDashboard(id);
@@ -24,12 +49,27 @@ const ExcelUpload = () => {
     setUploading(true);
 
     try {
-      await excelApi.upload({
+      const response = await excelApi.upload({
         file: files[0],
         dashboardId: id,
         sourceName,
       });
-      toast.success(`${sourceName} uploaded successfully`);
+
+      if (response?.data?.uploadJobId && response?.data?.status === 'queued') {
+        setJobStatusBySource((prev) => ({
+          ...prev,
+          [sourceName]: {
+            jobId: response.data.uploadJobId,
+            sourceName,
+            status: 'queued'
+          }
+        }));
+        toast.success(`${sourceName} queued for background processing`);
+        subscribeToJob(response.data.uploadJobId);
+      } else {
+        toast.success(`${sourceName} uploaded successfully`);
+      }
+
       await fetchDashboard(id);
     } catch (err) {
       toast.error(formatApiError(err));
@@ -60,6 +100,7 @@ const ExcelUpload = () => {
               key={source.name}
               source={source}
               uploading={uploading}
+              jobStatus={jobStatusBySource[source.name]}
               onUpload={(files) =>
                 handleUpload(files, source.name)
               }
@@ -79,6 +120,10 @@ const ExcelUpload = () => {
             </Button>
           </div>
         )}
+
+        <p className="mt-4 text-xs text-gray-500">
+          Upload channel: {socketState}
+        </p>
       </div>
     </div>
   );
@@ -86,7 +131,7 @@ const ExcelUpload = () => {
 
 export default ExcelUpload;
 
-const SourceUploadCard = ({ source, onUpload, uploading }) => {
+const SourceUploadCard = ({ source, onUpload, uploading, jobStatus }) => {
   const { getRootProps, getInputProps, isDragActive } =
     useDropzone({
       onDrop: files => onUpload(files),
@@ -103,6 +148,10 @@ const SourceUploadCard = ({ source, onUpload, uploading }) => {
   const isUploaded =
     source.status === 'uploaded' ||
     source.status === 'mapped';
+  const isProcessing =
+    source.status === 'processing' ||
+    jobStatus?.status === 'queued' ||
+    jobStatus?.status === 'processing';
 
   return (
     <div className="border border-gray-200 p-6">
@@ -111,6 +160,11 @@ const SourceUploadCard = ({ source, onUpload, uploading }) => {
         {isUploaded && (
           <span className="text-green-600 text-sm font-bold">
             Uploaded
+          </span>
+        )}
+        {isProcessing && (
+          <span className="text-amber-600 text-sm font-bold">
+            {jobStatus?.status === 'queued' ? 'Queued' : 'Processing'}
           </span>
         )}
       </div>

@@ -9,8 +9,7 @@ import { resolveDefaultRoute } from '../utils/defaultRoute';
 const Login = lazy(() => import('../Pages/Login'));
 const Register = lazy(() => import('../Pages/Register'));
 const Dashboard = lazy(() => import('../Pages/CLC/Dashboard'));
-const CustomerDetails = lazy(() => import('../Pages/CLC/CustomerDetails'));
-const CustomerSales = lazy(() => import('../Pages/CLC/CustomerSales'));
+const Customers = lazy(() => import('../Pages/CLC/Customers'));
 const CustomerCreate = lazy(() => import('../Pages/CLC/CustomerCreate'));
 const CustomerDetail = lazy(() => import('../Pages/CLC/CustomerDetail'));
 const Analytics = lazy(() => import('../Pages/CLC/Analytics'));
@@ -58,8 +57,8 @@ export default function AppRoutes() {
         <Route path="/dashboard" element={<PageLoader><ModuleRoute moduleKey="dashboard"><Dashboard /></ModuleRoute></PageLoader>} />
 
         <Route path="/customers" element={<Navigate to="/customers/details" replace />} />
-        <Route path="/customers/details" element={<PageLoader><ModuleRoute moduleKey="customers"><CustomerDetails /></ModuleRoute></PageLoader>} />
-        <Route path="/customers/sales" element={<PageLoader><ModuleRoute moduleKey="customers"><CustomerSales /></ModuleRoute></PageLoader>} />
+        <Route path="/customers/details" element={<PageLoader><ModuleRoute moduleKey="customers"><Customers moduleType="customer_details" /></ModuleRoute></PageLoader>} />
+        <Route path="/customers/sales" element={<PageLoader><ModuleRoute moduleKey="customers"><Customers moduleType="customer_sales" /></ModuleRoute></PageLoader>} />
         <Route path="/customers/new" element={<PageLoader><ModuleRoute moduleKey="customers"><CustomerCreate /></ModuleRoute></PageLoader>} />
         <Route path="/customers/:id" element={<PageLoader><ModuleRoute moduleKey="customers"><CustomerDetail /></ModuleRoute></PageLoader>} />
         <Route path="/customers/:id/edit" element={<PageLoader><ModuleRoute moduleKey="customers"><CustomerCreate /></ModuleRoute></PageLoader>} />

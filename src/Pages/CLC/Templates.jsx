@@ -81,7 +81,9 @@ export default function Templates() {
   const { user } = useAuthStore();
 
   const allowedModules = normalizeAllowedModules(user?.allowedModules);
-  const canManageTemplates = allowedModules.includes('templates');
+  const normalizedRole = String(user?.role || '').toLowerCase();
+  const canManageTemplates =
+    ['owner', 'admin'].includes(normalizedRole) || allowedModules.includes('templates');
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingTemplateId, setEditingTemplateId] = useState(null);
@@ -272,7 +274,7 @@ export default function Templates() {
             {canManageTemplates && (
               <Button onClick={() => setShowCreateModal(true)}>
                 <PlusCircle className="mr-2 h-4 w-4" />
-                Create Template
+                Add New
               </Button>
             )}
           </div>

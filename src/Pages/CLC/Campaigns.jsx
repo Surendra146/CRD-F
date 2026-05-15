@@ -103,7 +103,10 @@ export default function Campaigns() {
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
 
-  const canManageCampaigns = normalizeAllowedModules(user?.allowedModules).includes('campaigns');
+  const normalizedRole = String(user?.role || '').toLowerCase();
+  const canManageCampaigns =
+    ['owner', 'admin'].includes(normalizedRole) ||
+    normalizeAllowedModules(user?.allowedModules).includes('campaigns');
 
   const [showCampaignModal, setShowCampaignModal] = useState(false);
 
@@ -290,7 +293,7 @@ export default function Campaigns() {
                   }}
                 >
                   <PlusCircle className="mr-2 h-4 w-4" />
-                  Create Campaign
+                  Add New
                 </Button>
               </>
             ) : null}

@@ -152,7 +152,6 @@ export default function SegmentsModule() {
       toast.error('Segment name is required');
       return;
     }
-
     const payload = {
       name: form.name.trim(),
       description: form.description.trim(),
@@ -211,6 +210,7 @@ export default function SegmentsModule() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>Code</TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Filters</TableHead>
                     <TableHead>Updated</TableHead>
@@ -220,6 +220,9 @@ export default function SegmentsModule() {
                 <TableBody>
                   {segments.map((segment) => (
                     <TableRow key={segment._id}>
+                      <TableCell>
+                        <p className="font-mono text-xs text-gray-700">{segment.code || '-'}</p>
+                      </TableCell>
                       <TableCell>
                         <p className="font-medium text-gray-900">{segment.name}</p>
                         <p className="text-sm text-gray-500">{segment.description || 'No description'}</p>

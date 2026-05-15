@@ -67,6 +67,13 @@ export const excelApi = {
     });
   },
 
+  getUploadJobStatus: async (jobId) => {
+    return apiWrapper({
+      url: `${EXCEL_URL}/upload-jobs/${jobId}/status`,
+      method: 'GET',
+    });
+  },
+
   /* =========================
      HISTORY
   ========================= */

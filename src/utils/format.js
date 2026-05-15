@@ -40,19 +40,19 @@ export function getStatusColor(status) {
 
 export function getSegmentColor(segment) {
   const colors = {
-    champions: 'bg-emerald-500',
-    loyal_customers: 'bg-blue-500',
-    potential_loyalist: 'bg-cyan-500',
-    new_customers: 'bg-purple-500',
-    promising: 'bg-indigo-500',
-    need_attention: 'bg-yellow-500',
-    about_to_sleep: 'bg-orange-500',
-    at_risk: 'bg-red-400',
-    cant_lose: 'bg-red-600',
-    hibernating: 'bg-gray-400',
-    lost: 'bg-gray-600',
+    champions: '#10B981',
+    loyal_customers: '#3B82F6',
+    potential_loyalist: '#06B6D4',
+    new_customers: '#8B5CF6',
+    promising: '#6366F1',
+    need_attention: '#F59E0B',
+    about_to_sleep: '#F97316',
+    at_risk: '#F87171',
+    cant_lose: '#DC2626',
+    hibernating: '#9CA3AF',
+    lost: '#4B5563',
   };
-  return colors[segment] || 'bg-gray-500';
+  return colors[segment] || '#64748B';
 }
 
 export function truncate(str, length = 30) {
