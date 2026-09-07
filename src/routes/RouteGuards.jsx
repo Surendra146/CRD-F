@@ -41,10 +41,15 @@ export function RoleRoute({ children }) {
 
 export function ModuleRoute({ children, moduleKey }) {
   const { isAuthenticated, user } = useAuthStore();
+  const normalizedRole = (user?.role || '').toString().trim().toLowerCase();
   const allowedModules = normalizeAllowedModules(user?.allowedModules);
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (normalizedRole === 'owner' || normalizedRole === 'admin') {
+    return children;
   }
 
   if (

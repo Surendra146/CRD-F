@@ -27,6 +27,9 @@ function PreviewTable({ title, rows, type }) {
               {type === 'error' ? (
                 <th className="border px-3 py-2 text-left">Error</th>
               ) : null}
+              {type === 'warning' ? (
+                <th className="border px-3 py-2 text-left">Warning</th>
+              ) : null}
               <th className="border px-3 py-2 text-left">Preview Data</th>
             </tr>
           </thead>
@@ -39,6 +42,12 @@ function PreviewTable({ title, rows, type }) {
                 {type === 'error' ? (
                   <td className="border px-3 py-2 text-red-600">
                     {item.message || '-'}
+                  </td>
+                ) : null}
+
+                {type === 'warning' ? (
+                  <td className="border px-3 py-2 text-amber-700">
+                    {item.message || item.warnings?.join(', ') || '-'}
                   </td>
                 ) : null}
 
@@ -90,6 +99,8 @@ export default function ImportResultStep({
     processingStatus.errorPreview?.length > 0 ||
     processingStatus.errors?.length > 0 ||
     errorRows > 0;
+  const warningRows = processingStatus.stats?.warningRows || 0;
+  const warningPreview = processingStatus.warningPreview || [];
 
   return (
     <Card>
@@ -114,11 +125,11 @@ export default function ImportResultStep({
 
         {isValidationDone ? (
           <p className="text-sm text-gray-500">
-            Data is not saved yet. Click Yes to save only valid rows.
+            Uploaded rows are staged only. Review the validation results, then save valid records.
           </p>
         ) : null}
 
-        <div className="mx-auto mt-6 grid max-w-4xl grid-cols-2 gap-4 md:grid-cols-5">
+        <div className="mx-auto mt-6 grid max-w-5xl grid-cols-2 gap-4 md:grid-cols-6">
           <div className="rounded-lg bg-gray-50 p-4">
             <p className="text-2xl font-bold text-gray-900">
               {formatNumber(processingStatus.stats?.totalRows || 0)}
@@ -138,6 +149,13 @@ export default function ImportResultStep({
               {formatNumber(errorRows)}
             </p>
             <p className="text-sm text-gray-500">Error Rows</p>
+          </div>
+
+          <div className="rounded-lg bg-amber-50 p-4">
+            <p className="text-2xl font-bold text-amber-700">
+              {formatNumber(warningRows)}
+            </p>
+            <p className="text-sm text-gray-500">Warning Rows</p>
           </div>
 
           <div className="rounded-lg bg-blue-50 p-4">
@@ -168,6 +186,12 @@ export default function ImportResultStep({
               rows={processingStatus.errorPreview || processingStatus.errors || []}
               type="error"
             />
+
+            <PreviewTable
+              title="Warning Data Preview"
+              rows={warningPreview}
+              type="warning"
+            />
           </>
         ) : null}
 
@@ -187,7 +211,7 @@ export default function ImportResultStep({
           {isValidationDone ? (
             <Button onClick={onConfirmSave} disabled={isSaving || validRows === 0}>
               <Save className="mr-2 h-4 w-4" />
-              {isSaving ? 'Saving...' : 'Yes, Save Valid Data'}
+              {isSaving ? 'Saving...' : 'Save Valid Records'}
             </Button>
           ) : null}
 

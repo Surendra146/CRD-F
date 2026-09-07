@@ -8,10 +8,12 @@ import { io } from 'socket.io-client';
 const backendOrigin =
   import.meta.env.VITE_BACKEND_URL ||
   import.meta.env.VITE_API_URL ||
-  'http://localhost:5001';
+  'http://localhost:8000';
 
 export const BASE_URL = backendOrigin.replace(/\/$/, '');
 export const SOCKET_URL = BASE_URL;
+export const SOCKET_PROGRESS_ENABLED =
+  import.meta.env.VITE_ENABLE_SOCKET_PROGRESS === 'true';
 
 /* =========================
    WHATSAPP CONFIG (FIXED)

@@ -29,7 +29,7 @@ From this frontend directory (`D:\web apps\React\CBD project`):
 - Dev stack:
   - `npm run docker:dev`
   - Frontend: `http://localhost:5173`
-  - Backend: `http://localhost:5001`
+  - Backend: `http://localhost:8000`
 - Test stack:
   - `npm run docker:test`
 - Production stack:

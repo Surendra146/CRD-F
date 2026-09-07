@@ -1,5 +1,6 @@
 export {
   BASE_URL,
+  SOCKET_PROGRESS_ENABLED,
   SOCKET_URL,
   apiWrapper,
   formatApiError,

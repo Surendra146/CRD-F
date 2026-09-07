@@ -15,9 +15,19 @@ const normalizeAuthUser = (user) =>
     : null;
 
 const getErrorMessage = (error, fallback) => {
+  const status = error?.response?.status;
+  if (status === 429) {
+    const retryAfter = error?.response?.headers?.['retry-after'];
+    return retryAfter
+      ? `Too many login attempts. Please wait ${retryAfter} second(s) and try again.`
+      : 'Too many login attempts. Please wait a few minutes and try again.';
+  }
+
   return (
     error?.response?.data?.message ||
+    error?.response?.data?.detail ||
     error?.data?.message ||
+    error?.data?.detail ||
     error?.message ||
     fallback
   );
@@ -40,7 +50,7 @@ export const useAuthStore = create(
 
           const token = response.token;
           const refreshToken = response.refreshToken;
-          const user = response.user;
+          const user = response.user || response.data;
 
           if (!token || !user) {
             set({ isLoading: false });
@@ -94,7 +104,7 @@ export const useAuthStore = create(
 
           const token = response.token;
           const refreshToken = response.refreshToken;
-          const user = response.user;
+          const user = response.user || response.data;
 
           if (!token || !user) {
             set({ isLoading: false });

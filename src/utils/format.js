@@ -16,15 +16,24 @@ export function formatCompactCurrency(amount, currency = 'INR') {
 }
 
 export function formatNumber(num) {
-  return new Intl.NumberFormat('en-US').format(num);
+  return new Intl.NumberFormat('en-US').format(Number.isFinite(Number(num)) ? Number(num) : 0);
 }
 
-export function formatDate(date, formatStr = 'MMM dd, yyyy') {
-  return format(new Date(date), formatStr);
+export function parseValidDate(date) {
+  if (!date) return null;
+
+  const parsedDate = date instanceof Date ? date : new Date(date);
+  return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
 }
 
-export function formatRelativeTime(date) {
-  return formatDistanceToNow(new Date(date), { addSuffix: true });
+export function formatDate(date, formatStr = 'MMM dd, yyyy', fallback = 'N/A') {
+  const parsedDate = parseValidDate(date);
+  return parsedDate ? format(parsedDate, formatStr) : fallback;
+}
+
+export function formatRelativeTime(date, fallback = 'N/A') {
+  const parsedDate = parseValidDate(date);
+  return parsedDate ? formatDistanceToNow(parsedDate, { addSuffix: true }) : fallback;
 }
 
 export function getStatusColor(status) {

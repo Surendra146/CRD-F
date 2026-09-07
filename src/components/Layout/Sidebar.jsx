@@ -14,14 +14,14 @@ export default function Sidebar() {
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
 
-  const [expandedParents, setExpandedParents] = useState(() => {
+  const [expandedParentKey, setExpandedParentKey] = useState(() => {
     try {
       const raw = localStorage.getItem(SIDEBAR_EXPANDED_STORAGE_KEY);
-      if (!raw) return {};
+      if (!raw) return '';
       const parsed = JSON.parse(raw);
-      return parsed && typeof parsed === 'object' ? parsed : {};
+      return typeof parsed === 'string' ? parsed : '';
     } catch {
-      return {};
+      return '';
     }
   });
 
@@ -41,11 +41,10 @@ export default function Sidebar() {
       });
   }, [user?.role, JSON.stringify(user?.allowedModules || [])]);
 
-  const parentKeysText = useMemo(() => {
+  const parentKeys = useMemo(() => {
     return navigation
       .filter((item) => Array.isArray(item.children) && item.children.length > 0)
-      .map((item) => item.key)
-      .join('|');
+      .map((item) => item.key);
   }, [navigation]);
 
   const activeParentKey = useMemo(() => {
@@ -59,39 +58,23 @@ export default function Sidebar() {
   }, [navigation, location.pathname]);
 
   useEffect(() => {
-    setExpandedParents((prev) => {
-      const next = { ...prev };
-      let changed = false;
-
-      parentKeysText
-        .split('|')
-        .filter(Boolean)
-        .forEach((key) => {
-          if (next[key] === undefined) {
-            next[key] = true;
-            changed = true;
-          }
-        });
-
-      if (activeParentKey && next[activeParentKey] !== true) {
-        next[activeParentKey] = true;
-        changed = true;
-      }
-
-      return changed ? next : prev;
+    setExpandedParentKey((prev) => {
+      if (activeParentKey) return activeParentKey;
+      if (prev && parentKeys.includes(prev)) return prev;
+      return '';
     });
-  }, [parentKeysText, activeParentKey]);
+  }, [parentKeys, activeParentKey]);
 
   useEffect(() => {
     try {
       localStorage.setItem(
         SIDEBAR_EXPANDED_STORAGE_KEY,
-        JSON.stringify(expandedParents)
+        JSON.stringify(expandedParentKey)
       );
     } catch {
       // Ignore storage errors
     }
-  }, [expandedParents]);
+  }, [expandedParentKey]);
 
   const handleLogout = () => {
     logout();
@@ -138,10 +121,7 @@ export default function Sidebar() {
               <button
                 type="button"
                 onClick={() =>
-                  setExpandedParents((prev) => ({
-                    ...prev,
-                    [item.key]: !prev[item.key],
-                  }))
+                  setExpandedParentKey((prev) => (prev === item.key ? '' : item.key))
                 }
                 className={cn(
                   'flex w-full items-center justify-between px-4 py-2.5 rounded-lg text-sm font-medium transition-colors',
@@ -158,12 +138,12 @@ export default function Sidebar() {
                 <ChevronDown
                   className={cn(
                     'h-4 w-4 transition-transform',
-                    expandedParents[item.key] ? 'rotate-180' : 'rotate-0'
+                    expandedParentKey === item.key ? 'rotate-180' : 'rotate-0'
                   )}
                 />
               </button>
 
-              {expandedParents[item.key] ? (
+              {expandedParentKey === item.key ? (
                 <div className="ml-4 space-y-1 border-l border-gray-800 pl-3">
                   {item.children.map((child) => (
                     <NavLink

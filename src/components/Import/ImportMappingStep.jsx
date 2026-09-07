@@ -14,17 +14,20 @@ export default function ImportMappingStep({
 }) {
   const mappingOptions = targetFieldOptions?.length ? targetFieldOptions : targetFieldOptionsFallback;
   const isSalesImport = importType === 'customer_sales';
+  const columns = Array.isArray(uploadData?.columns) ? uploadData.columns : [];
+  const previewRows = Array.isArray(uploadData?.preview) ? uploadData.preview : [];
+  const mappings = Array.isArray(columnMapping) ? columnMapping : [];
 
   const sections = [
     {
       key: 'import-file',
       preview: {
-        title: `File Preview (${formatNumber(uploadData.totalRows)} rows)`,
-        columns: uploadData.columns,
-        rows: uploadData.preview.slice(0, 3),
+        title: `File Preview (${formatNumber(uploadData?.totalRows)} rows)`,
+        columns,
+        rows: previewRows.slice(0, 3),
       },
       mappingTitle: 'Column Mapping',
-      mappingRows: columnMapping.map((mapping, index) => ({
+      mappingRows: mappings.map((mapping, index) => ({
         key: `${mapping.sourceColumn}-${index}`,
         label: mapping.sourceColumn,
         selects: [

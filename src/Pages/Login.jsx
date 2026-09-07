@@ -19,6 +19,7 @@ export default function Login() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isLoading) return;
 
     const validationError = validateBySchema(formData, authFormSchemas.login);
     if (validationError) {

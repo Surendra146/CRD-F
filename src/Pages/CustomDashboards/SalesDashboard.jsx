@@ -13,10 +13,10 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '../../components/ui/dialog';
+} from '../../components/UI/dialog';
 import Button from '../../components/UI/button';
 import Input from '../../components/UI/input';
-import { Label } from '../../components/ui/label';
+import { Label } from '../../components/UI/label';
 
 export default function SalesDashboard() {
   const { dashboards, loading, fetchDashboards, createDashboard, deleteDashboard } = useDashboard();

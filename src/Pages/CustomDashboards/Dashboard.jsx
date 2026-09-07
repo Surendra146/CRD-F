@@ -13,11 +13,11 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '../../components/ui/dialog';
+} from '../../components/UI/dialog';
 import Button from '../../components/UI/button';
 import Input from '../../components/UI/input';
 import Badge from '../../components/UI/badge';
-import { Label } from '../../components/ui/label';
+import { Label } from '../../components/UI/label';
 import { uploadsApi } from '../../services/uploads';
 import { excelApi } from '../../services/excel';
 

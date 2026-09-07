@@ -6,7 +6,6 @@ const moduleRouteByKey = {
   'customer-details': '/customers/details',
   'customer-sales': '/customers/sales',
   analytics: '/analytics',
-  'custom-dashboards': '/dashboards',
   import: '/import',
   campaigns: '/campaigns',
   'campaign-master': '/campaigns',
@@ -19,7 +18,23 @@ const moduleRouteByKey = {
   roles: '/roles',
   users: '/users',
   settings: '/settings',
+  'custom-dashboards': '/dashboards',
 };
+
+const defaultRoutePriority = [
+  'dashboard',
+  'customers',
+  'analytics',
+  'import',
+  'campaigns',
+  'templates',
+  'whatsapp',
+  'segments-child',
+  'roles',
+  'users',
+  'settings',
+  'custom-dashboards',
+];
 
 export function resolveDefaultRoute(user) {
   const allowedModules = normalizeAllowedModules(user?.allowedModules);
@@ -28,6 +43,6 @@ export function resolveDefaultRoute(user) {
     return '/dashboard';
   }
 
-  const firstMatch = allowedModules.find((moduleKey) => moduleRouteByKey[moduleKey]);
+  const firstMatch = defaultRoutePriority.find((moduleKey) => allowedModules.includes(moduleKey) && moduleRouteByKey[moduleKey]);
   return firstMatch ? moduleRouteByKey[firstMatch] : '/dashboard';
 }

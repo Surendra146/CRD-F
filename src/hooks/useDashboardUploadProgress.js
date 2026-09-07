@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getSocketClient } from '../services/api';
+import { SOCKET_PROGRESS_ENABLED, getSocketClient } from '../services/api';
 import { excelApi } from '../services/excel';
 
 const TERMINAL = new Set(['completed', 'failed']);
@@ -35,6 +35,7 @@ export default function useDashboardUploadProgress({ onProgress }) {
 
   const startPolling = useCallback((jobId) => {
     stopPolling();
+    setSocketState('polling');
     pollJobStatus(jobId);
     pollingRef.current = setInterval(() => {
       pollJobStatus(jobId);
@@ -42,6 +43,13 @@ export default function useDashboardUploadProgress({ onProgress }) {
   }, [pollJobStatus, stopPolling]);
 
   useEffect(() => {
+    if (!SOCKET_PROGRESS_ENABLED) {
+      setSocketState('polling');
+      return () => {
+        stopPolling();
+      };
+    }
+
     const socket = getSocketClient();
     socketRef.current = socket;
 
@@ -101,6 +109,11 @@ export default function useDashboardUploadProgress({ onProgress }) {
     if (!jobId) return;
 
     activeJobIdRef.current = jobId;
+
+    if (!SOCKET_PROGRESS_ENABLED) {
+      startPolling(jobId);
+      return;
+    }
 
     const socket = socketRef.current || getSocketClient();
     socketRef.current = socket;

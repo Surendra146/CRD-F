@@ -24,9 +24,23 @@ export default function ColumnMappingWorkspace({
   savingLabel = 'Saving...',
   showCard = true,
 }) {
+  const normalizedSections = Array.isArray(sections)
+    ? sections.map((section) => ({
+        ...section,
+        mappingRows: Array.isArray(section.mappingRows) ? section.mappingRows : [],
+        preview: section.preview
+          ? {
+              ...section.preview,
+              columns: Array.isArray(section.preview.columns) ? section.preview.columns : [],
+              rows: Array.isArray(section.preview.rows) ? section.preview.rows : [],
+            }
+          : null,
+      }))
+    : [];
+
   const content = (
     <>
-      {sections.map((section) => (
+      {normalizedSections.map((section) => (
         <div key={section.key} className="mb-8 last:mb-0">
           {section.title ? (
             <div className="mb-4">

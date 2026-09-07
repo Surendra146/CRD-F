@@ -96,7 +96,7 @@ export default function CustomerCreate() {
     })),
   ];
 
-  const { data: customerData } = useQuery({
+  const { data: customerData } = useQuery({ 
     queryKey: ['customer-edit', id],
     queryFn: () => customersApi.getById(id).then(normalizeCustomer),
     enabled: isEditMode,
@@ -260,6 +260,7 @@ export default function CustomerCreate() {
       const payload = {
         name: form.name.trim(),
         phone: normalizedPhone,
+        moduleType: 'customer_sales',
         demographics: {
           location: {
             locationCode: normalizedLocationName,
@@ -281,6 +282,7 @@ export default function CustomerCreate() {
     const payload = {
       externalId: normalizedPhone,
       name: form.name.trim(),
+      moduleType: 'customer_details',
       email: form.email || undefined,
       phone: normalizedPhone,
       address: form.address.trim(),

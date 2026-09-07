@@ -4,6 +4,21 @@ import { Card, CardContent } from '../UI/card.jsx';
 import Loader from '../UI/loader';
 import { formatNumber } from '../../utils/format';
 
+function sanitizeDebugDetails(details) {
+  if (!details || typeof details !== 'object') return details;
+
+  const processingTimeKeys = new Set([
+    'processing_time',
+    'processingTime',
+    'processing_time_ms',
+    'processingTimeMs',
+  ]);
+
+  return Object.fromEntries(
+    Object.entries(details).filter(([key]) => !processingTimeKeys.has(key))
+  );
+}
+
 export default function ImportProcessingStep({
   socketState,
   progressProcessed,
@@ -62,11 +77,16 @@ export default function ImportProcessingStep({
                   <div className="text-gray-900">
                     [{event.timestamp}] {event.message}
                   </div>
-                  {event.details ? (
-                    <pre className="mt-1 overflow-x-auto whitespace-pre-wrap text-gray-600">
-                      {JSON.stringify(event.details, null, 2)}
-                    </pre>
-                  ) : null}
+                  {(() => {
+                    const sanitizedDetails = sanitizeDebugDetails(event.details);
+                    if (!sanitizedDetails || Object.keys(sanitizedDetails).length === 0) return null;
+
+                    return (
+                      <pre className="mt-1 overflow-x-auto whitespace-pre-wrap text-gray-600">
+                        {JSON.stringify(sanitizedDetails, null, 2)}
+                      </pre>
+                    );
+                  })()}
                 </div>
               ))
             ) : (

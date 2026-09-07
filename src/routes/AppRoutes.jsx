@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 
-import MainLayout from '../components/layout/MainLayout';
+import MainLayout from '../components/Layout/mainLayout';
 import { ModuleRoute, ProtectedRoute, PublicRoute } from './RouteGuards';
 import { useAuthStore } from '../store/authstore';
 import { resolveDefaultRoute } from '../utils/defaultRoute';

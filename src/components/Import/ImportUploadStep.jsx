@@ -85,7 +85,9 @@ export default function ImportUploadStep({
                 {recentUploads.map((upload) => (
                   <div key={upload._id} className="px-6 py-3">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="truncate text-sm font-medium">{upload.file.originalName}</p>
+                      <p className="truncate text-sm font-medium">
+                        {upload.file?.originalName || upload.file?.name || 'Uploaded file'}
+                      </p>
                       <Badge
                         variant={
                           upload.status === 'completed'
@@ -101,7 +103,8 @@ export default function ImportUploadStep({
                       </Badge>
                     </div>
                     <p className="mt-1 text-xs text-gray-500">
-                      {formatDate(upload.createdAt)} | {formatNumber(upload.stats.totalRows)} rows
+                      {formatDate(upload.createdAt || upload.created_at)} |{' '}
+                      {formatNumber(upload.stats?.totalRows || upload.stats?.total_rows)} rows
                     </p>
                   </div>
                 ))}

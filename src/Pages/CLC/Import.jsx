@@ -13,7 +13,8 @@ import {
   importTypeOptions,
   maxImportFileSizeBytes,
   maxImportFileSizeMb,
-  targetFieldOptionsFallback
+  targetFieldOptionsFallback,
+  terminalStatuses,
 } from '../../components/Import/importConstants';
 import useImportProgress from '../../hooks/useImportProgress';
 import { uploadsApi } from '../../services/uploads';
@@ -41,6 +42,24 @@ const ensureTargetFieldOptions = (options, importType) => {
   return Array.from(optionMap.values());
 };
 
+const formatTargetFieldOption = (option) => {
+  if (option.defaultValue) {
+    return {
+      ...option,
+      label: `${option.label} (default: ${option.defaultValue})`,
+    };
+  }
+
+  if (Array.isArray(option.derivedFrom) && option.derivedFrom.length) {
+    return {
+      ...option,
+      label: `${option.label} (auto)`,
+    };
+  }
+
+  return option;
+};
+
 const withDerivedCodeMappings = (mappings) => {
   const validMappings = getValidColumnMappings(mappings);
   const mappingByTarget = new Map(validMappings.map((item) => [item.targetField, item]));
@@ -65,6 +84,25 @@ const withDerivedCodeMappings = (mappings) => {
   return enrichedMappings;
 };
 
+const normalizeUploadData = (data) => {
+  const stats = data?.stats || {};
+  const previewColumns = data?.validPreview?.[0]?.columns || data?.valid_preview?.[0]?.columns;
+  const stagedPreviewRows = data?.validPreview?.[0]?.rows || data?.valid_preview?.[0]?.rows;
+  const previewRows = data?.preview || stagedPreviewRows || data?.validPreview || data?.valid_preview;
+
+  return {
+    ...(data || {}),
+    uploadId: data?.uploadId || data?.upload_id || data?.id || data?._id,
+    columns: Array.isArray(data?.columns)
+      ? data.columns
+      : Array.isArray(previewColumns)
+        ? previewColumns
+        : [],
+    preview: Array.isArray(previewRows) ? previewRows : [],
+    totalRows: data?.totalRows || data?.total_rows || stats.totalRows || stats.total_rows || 0,
+  };
+};
+
 export default function Import() {
   const queryClient = useQueryClient();
 
@@ -87,13 +125,15 @@ export default function Import() {
     );
 
     return visibleTargetOptions.map((option) => {
+      const formattedOption = formatTargetFieldOption(option);
+
       if (!option.value || !mandatoryValues.has(option.value)) {
-        return option;
+        return formattedOption;
       }
 
       return {
-        ...option,
-        label: option.label.includes('*') ? option.label : `${option.label} *`,
+        ...formattedOption,
+        label: formattedOption.label.includes('*') ? formattedOption.label : `${formattedOption.label} *`,
       };
     });
   }, [targetFieldOptions, importType]);
@@ -117,8 +157,15 @@ export default function Import() {
       }
 
       setStep(4);
+      if (statusData?.status === 'completed') {
+        toast.success('Valid data saved successfully');
+      }
       queryClient.invalidateQueries({ queryKey: ['customers'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics-dashboard-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics-segments'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics-revenue'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics-churn'] });
       queryClient.invalidateQueries({ queryKey: ['upload-history'] });
     },
     [queryClient]
@@ -133,7 +180,7 @@ export default function Import() {
     mutationFn: (file) => uploadsApi.upload(file, importType),
 
     onSuccess: async (response) => {
-      const uploadedData = response?.data;
+      const uploadedData = normalizeUploadData(response?.data);
 
       addDebugEvent('Upload API succeeded', {
         uploadId: uploadedData.uploadId,
@@ -163,7 +210,9 @@ export default function Import() {
           suggestions: suggestions.length,
         });
 
-        const mapping = uploadedData.columns.map((col) => {
+        const uploadColumns = Array.isArray(uploadedData.columns) ? uploadedData.columns : [];
+
+        const mapping = uploadColumns.map((col) => {
           const suggestion = suggestions.find((item) => item.sourceColumn === col);
           const suggestedTarget = suggestion?.targetField || '';
           const hiddenTargetFieldSet = hiddenTargetFieldsByImportType[importType] || new Set();
@@ -186,7 +235,9 @@ export default function Import() {
           error: error.response?.data?.message || error.message,
         });
 
-        const mapping = uploadedData.columns.map((col) => ({
+        const uploadColumns = Array.isArray(uploadedData.columns) ? uploadedData.columns : [];
+
+        const mapping = uploadColumns.map((col) => ({
           sourceColumn: col,
           targetField: '',
           transformation: 'none',
@@ -220,7 +271,8 @@ export default function Import() {
     },
 
     onSuccess: (response) => {
-      const statusFromApi = response?.data?.status || 'processing';
+      const statusData = response?.data || {};
+      const statusFromApi = statusData.status || 'processing';
 
       addDebugEvent('Process API responded', {
         uploadId: uploadData?.uploadId,
@@ -229,6 +281,7 @@ export default function Import() {
       });
 
       const nextStatus = {
+        ...statusData,
         uploadId: uploadData?.uploadId,
         status: statusFromApi,
         stats: {
@@ -240,9 +293,15 @@ export default function Import() {
           newCustomers: 0,
           updatedCustomers: 0,
           newTransactions: 0,
+          ...(statusData.stats || {}),
         },
-        errors: [],
+        errors: statusData.errors || [],
       };
+
+      if (terminalStatuses.has(statusFromApi)) {
+        finishImport(nextStatus);
+        return;
+      }
 
       setStep(3);
       setProcessingStatus(nextStatus);
@@ -330,10 +389,26 @@ export default function Import() {
       stats: savedData?.stats || prev?.stats,
     }));
 
-    toast.success('Valid data saved successfully');
+    if (terminalStatuses.has(savedData?.status)) {
+      if (savedData?.status === 'completed') {
+        toast.success('Valid data saved successfully');
+      }
+    } else {
+      setStep(3);
+      subscribeToUpload(uploadData.uploadId);
+      addDebugEvent('Save started in background', {
+        uploadId: uploadData?.uploadId,
+        status: savedData?.status || 'saving',
+      });
+      return;
+    }
 
     queryClient.invalidateQueries({ queryKey: ['customers'] });
     queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    queryClient.invalidateQueries({ queryKey: ['analytics-dashboard-summary'] });
+    queryClient.invalidateQueries({ queryKey: ['analytics-segments'] });
+    queryClient.invalidateQueries({ queryKey: ['analytics-revenue'] });
+    queryClient.invalidateQueries({ queryKey: ['analytics-churn'] });
     queryClient.invalidateQueries({ queryKey: ['upload-history'] });
   },
 

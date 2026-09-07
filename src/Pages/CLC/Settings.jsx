@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import {
@@ -43,20 +43,23 @@ export default function Settings() {
   const settingsQuery = useQuery({
     queryKey: ['organization-settings'],
     queryFn: () => authApi.getOrganizationSettings().then(normalizeData),
-    onSuccess: (data) => {
-      const nextThresholds = data?.customerLifecycleThresholds;
-
-      if (nextThresholds) {
-        setThresholds({
-          activeCustomerDays: Number(nextThresholds.activeCustomerDays) || DEFAULT_THRESHOLDS.activeCustomerDays,
-          atRiskCustomerDays: Number(nextThresholds.atRiskCustomerDays) || DEFAULT_THRESHOLDS.atRiskCustomerDays,
-          churnedCustomerDays: Number(nextThresholds.churnedCustomerDays) || DEFAULT_THRESHOLDS.churnedCustomerDays,
-          minimumPurchaseQuantity:
-            Number(nextThresholds.minimumPurchaseQuantity) || DEFAULT_THRESHOLDS.minimumPurchaseQuantity,
-        });
-      }
-    },
   });
+
+  useEffect(() => {
+    const nextThresholds = settingsQuery.data?.customerLifecycleThresholds;
+
+    if (!nextThresholds) {
+      return;
+    }
+
+    setThresholds({
+      activeCustomerDays: Number(nextThresholds.activeCustomerDays) || DEFAULT_THRESHOLDS.activeCustomerDays,
+      atRiskCustomerDays: Number(nextThresholds.atRiskCustomerDays) || DEFAULT_THRESHOLDS.atRiskCustomerDays,
+      churnedCustomerDays: Number(nextThresholds.churnedCustomerDays) || DEFAULT_THRESHOLDS.churnedCustomerDays,
+      minimumPurchaseQuantity:
+        Number(nextThresholds.minimumPurchaseQuantity) || DEFAULT_THRESHOLDS.minimumPurchaseQuantity,
+    });
+  }, [settingsQuery.data]);
 
   const updateSettingsMutation = useMutation({
     mutationFn: (payload) => authApi.updateOrganizationSettings(payload).then(normalizeData),
