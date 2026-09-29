@@ -1,2 +1,2 @@
-export * from './apiconfig';
-export { default } from './apiconfig';
+export * from './apiConfig';
+export { default } from './apiConfig';
