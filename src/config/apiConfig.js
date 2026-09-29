@@ -149,7 +149,7 @@ export const getSocketClient = () => {
   if (!socketInstance) {
     socketInstance = io(SOCKET_URL, {
       autoConnect: false,
-      transports: ['websocket'],
+      transports: ['websocket', 'polling'],
       auth: { token },
     });
   } else {

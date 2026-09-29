@@ -34,7 +34,7 @@ export default function SalesDashboard() {
 
   useEffect(() => {
     fetchDashboards();
-  }, []);
+  }, [fetchDashboards]);
 
   const handleSourceCountChange = (count) => {
     const num = parseInt(count, 10) || 1;

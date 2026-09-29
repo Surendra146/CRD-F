@@ -41,7 +41,7 @@ const ExcelUpload = () => {
 
   useEffect(() => {
     if (id) fetchDashboard(id);
-  }, [id]);
+  }, [id, fetchDashboard]);
 
   const handleUpload = async (files, sourceName) => {
     if (!files.length) return;

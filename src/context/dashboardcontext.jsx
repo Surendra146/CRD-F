@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { formatApiError } from '../services/api';
 import { dashboardsApi } from '../services/dashboards';
 import { DashboardContext } from './dashboardContextValue';
@@ -29,7 +29,7 @@ export const DashboardProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   
-  const fetchDashboards = async () => {
+  const fetchDashboards = useCallback(async () => {
     setLoading(true);
     try {
       const response = await dashboardsApi.getAll();
@@ -41,9 +41,9 @@ export const DashboardProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
   
-  const fetchDashboard = async (id) => {
+  const fetchDashboard = useCallback(async (id) => {
     setLoading(true);
     try {
       const response = await dashboardsApi.getById(id);
@@ -57,9 +57,9 @@ export const DashboardProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
   
-  const createDashboard = async (dashboardData) => {
+  const createDashboard = useCallback(async (dashboardData) => {
     try {
       const response = await dashboardsApi.create(dashboardData);
       const data = extractDashboard(response);
@@ -71,9 +71,9 @@ export const DashboardProvider = ({ children }) => {
       setError(errorMsg);
       throw new Error(errorMsg);
     }
-  };
+  }, []);
   
-  const updateDashboard = async (id, updates) => {
+  const updateDashboard = useCallback(async (id, updates) => {
     try {
       const response = await dashboardsApi.update(id, updates);
       const data = extractDashboard(response);
@@ -86,9 +86,9 @@ export const DashboardProvider = ({ children }) => {
       setError(errorMsg);
       throw new Error(errorMsg);
     }
-  };
+  }, []);
   
-  const deleteDashboard = async (id) => {
+  const deleteDashboard = useCallback(async (id) => {
     try {
       await dashboardsApi.delete(id);
       setDashboards((prev) => sanitizeDashboards(prev).filter((d) => d._id !== id));
@@ -98,7 +98,7 @@ export const DashboardProvider = ({ children }) => {
       setError(errorMsg);
       throw new Error(errorMsg);
     }
-  };
+  }, []);
   
   return (
     <DashboardContext.Provider

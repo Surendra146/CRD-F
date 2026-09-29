@@ -94,8 +94,10 @@ export default function Templates() {
     whatsappTemplateName: '',
     headerType: 'none',
     headerText: '',
+    headerMediaUrl: '',
     body: '',
     footer: '',
+    buttons: [],
     statuses: [],
     segments: [],
     minDaysSinceLastPurchase: '',
@@ -168,8 +170,10 @@ export default function Templates() {
       whatsappTemplateName: '',
       headerType: 'none',
       headerText: '',
+      headerMediaUrl: '',
       body: '',
       footer: '',
+      buttons: [],
       statuses: [],
       segments: [],
       minDaysSinceLastPurchase: '',
@@ -184,6 +188,40 @@ export default function Templates() {
         ? prev[key].filter((v) => v !== value)
         : [...prev[key], value],
     }));
+  };
+
+  const addButton = (type = 'quick_reply') => {
+    if (form.buttons.length >= 3) {
+      toast.error('Maximum 3 interactive buttons allowed');
+      return;
+    }
+    setForm((prev) => ({
+      ...prev,
+      buttons: [
+        ...prev.buttons,
+        {
+          id: `btn_${Date.now()}`,
+          type,
+          text: type === 'quick_reply' ? 'Quick Reply' : type === 'url' ? 'Visit Website' : 'Call Now',
+          value: type === 'url' ? 'https://example.com' : type === 'phone_number' ? '+919876543210' : 'quick_reply',
+        },
+      ],
+    }));
+  };
+
+  const removeButton = (index) => {
+    setForm((prev) => ({
+      ...prev,
+      buttons: prev.buttons.filter((_, idx) => idx !== index),
+    }));
+  };
+
+  const updateButton = (index, field, val) => {
+    setForm((prev) => {
+      const next = [...prev.buttons];
+      next[index] = { ...next[index], [field]: val };
+      return { ...prev, buttons: next };
+    });
   };
 
   /* =========================
@@ -203,9 +241,11 @@ export default function Templates() {
         header: {
           type: form.headerType,
           text: form.headerType === 'text' ? form.headerText : undefined,
+          mediaUrl: ['image', 'document', 'video'].includes(form.headerType) ? form.headerMediaUrl : undefined,
         },
         body: form.body.trim(),
         footer: form.footer || undefined,
+        buttons: form.buttons || [],
       },
       targeting: {
         statuses: form.statuses,
@@ -235,8 +275,10 @@ export default function Templates() {
       whatsappTemplateName: template.whatsappTemplateName || '',
       headerType: template.content?.header?.type || 'none',
       headerText: template.content?.header?.text || '',
+      headerMediaUrl: template.content?.header?.mediaUrl || '',
       body: template.content?.body || '',
       footer: template.content?.footer || '',
+      buttons: template.content?.buttons || [],
       statuses: template.targeting?.statuses || [],
       segments: template.targeting?.segments || [],
       minDaysSinceLastPurchase: template.targeting?.minDaysSinceLastPurchase || '',
@@ -315,7 +357,21 @@ export default function Templates() {
                       <TableCell>{getStatus(template)}</TableCell>
 
                       <TableCell>
-                        {truncate(getPreview(template), 80)}
+                        <div className="flex flex-col gap-1">
+                          <span>{truncate(getPreview(template), 70)}</span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {template.content?.header?.type && template.content.header.type !== 'none' && (
+                              <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-600 font-medium capitalize">
+                                📎 {template.content.header.type}
+                              </span>
+                            )}
+                            {template.content?.buttons?.length > 0 && (
+                              <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-700 font-medium">
+                                🔘 {template.content.buttons.length} Buttons
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </TableCell>
 
                       <TableCell>
@@ -394,6 +450,9 @@ export default function Templates() {
             options={[
               { label: 'None', value: 'none' },
               { label: 'Text', value: 'text' },
+              { label: 'Image', value: 'image' },
+              { label: 'Document (PDF)', value: 'document' },
+              { label: 'Video', value: 'video' },
             ]}
           />
 
@@ -405,14 +464,25 @@ export default function Templates() {
             />
           ) : null}
 
+          {['image', 'document', 'video'].includes(form.headerType) ? (
+            <Input
+              label="Header Media URL"
+              placeholder="https://example.com/media.jpg or document.pdf"
+              value={form.headerMediaUrl}
+              onChange={(event) => setForm((prev) => ({ ...prev, headerMediaUrl: event.target.value }))}
+            />
+          ) : null}
+
           <div>
             <label className="mb-2 block text-sm font-medium text-gray-700">Template Body *</label>
             <textarea
               rows={4}
               value={form.body}
               onChange={(event) => setForm((prev) => ({ ...prev, body: event.target.value }))}
+              placeholder="Hi {{name}}, we have a special offer for you..."
               className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
+            <p className="mt-1 text-xs text-gray-500">Supports variables: &#123;&#123;name&#125;&#125;, &#123;&#123;phone&#125;&#125;, &#123;&#123;city&#125;&#125;, &#123;&#123;total_spent&#125;&#125;</p>
           </div>
 
           <Input
@@ -420,6 +490,64 @@ export default function Templates() {
             value={form.footer}
             onChange={(event) => setForm((prev) => ({ ...prev, footer: event.target.value }))}
           />
+
+          {/* Interactive Buttons (Feature 4: Add Button) */}
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-900">Interactive WhatsApp Buttons</p>
+                <p className="text-xs text-gray-500">Add Quick Replies or Call-To-Action (URL/Phone) buttons</p>
+              </div>
+              <div className="flex gap-2">
+                <Button type="button" size="sm" variant="outline" onClick={() => addButton('quick_reply')} disabled={form.buttons.length >= 3}>
+                  + Quick Reply
+                </Button>
+                <Button type="button" size="sm" variant="outline" onClick={() => addButton('url')} disabled={form.buttons.length >= 3}>
+                  + URL Button
+                </Button>
+                <Button type="button" size="sm" variant="outline" onClick={() => addButton('phone_number')} disabled={form.buttons.length >= 3}>
+                  + Phone Button
+                </Button>
+              </div>
+            </div>
+
+            {form.buttons.length > 0 ? (
+              <div className="space-y-2">
+                {form.buttons.map((btn, idx) => (
+                  <div key={btn.id || idx} className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white p-2">
+                    <span className="rounded bg-primary-100 px-2 py-0.5 text-xs font-semibold text-primary-700 uppercase">
+                      {btn.type.replace('_', ' ')}
+                    </span>
+                    <input
+                      type="text"
+                      className="flex-1 rounded border border-gray-300 px-2 py-1 text-xs text-gray-800"
+                      placeholder="Button Title"
+                      value={btn.text}
+                      onChange={(e) => updateButton(idx, 'text', e.target.value)}
+                    />
+                    {btn.type !== 'quick_reply' ? (
+                      <input
+                        type="text"
+                        className="flex-1 rounded border border-gray-300 px-2 py-1 text-xs text-gray-800"
+                        placeholder={btn.type === 'url' ? 'https://example.com' : '+919876543210'}
+                        value={btn.value}
+                        onChange={(e) => updateButton(idx, 'value', e.target.value)}
+                      />
+                    ) : null}
+                    <button
+                      type="button"
+                      className="text-red-500 hover:text-red-700 text-xs px-2"
+                      onClick={() => removeButton(idx)}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-gray-400 italic">No buttons added yet. Up to 3 buttons allowed.</p>
+            )}
+          </div>
 
           <div>
             <p className="mb-2 text-sm font-medium text-gray-700">Statuses</p>

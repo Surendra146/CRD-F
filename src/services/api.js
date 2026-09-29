@@ -24,4 +24,5 @@ export * from './dashboards';
 export * from './analytics';
 export * from './excel';
 export * from './notifications';
+export * from './marketingTools';
 export * from './auth';

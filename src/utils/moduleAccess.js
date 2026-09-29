@@ -11,6 +11,10 @@ const MODULE_KEY_ALIASES = {
   'segments-child': 'campaigns',
   'templates-child': 'templates',
   'whatsapp-child': 'whatsapp',
+  'whatsapp-gmaps': 'whatsapp',
+  'whatsapp-filter': 'whatsapp',
+  'whatsapp-bot': 'whatsapp',
+  'whatsapp-groups': 'whatsapp',
 };
 
 export function normalizeModuleKey(moduleKey) {

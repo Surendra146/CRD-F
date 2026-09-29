@@ -97,7 +97,7 @@ const DashboardList = () => {
   
   useEffect(() => {
     fetchDashboards();
-  }, []);
+  }, [fetchDashboards]);
   
   const handleSourceCountChange = (count) => {
     const num = parseInt(count) || 1;

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   Gift,
@@ -10,6 +11,13 @@ import {
   Sparkles,
   Star,
   Users,
+  Layers,
+  Clock,
+  MapPin,
+  Bot,
+  Filter,
+  Users2,
+  Calendar,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -39,6 +47,17 @@ import {
   whatsappSendPath,
 } from '../../services/api';
 import { formatCurrency, formatNumber, formatRelativeTime } from '../../utils/format.js';
+
+// Marketing Hub Sub-Components
+import BulkSenderTab from './whatsapp/BulkSenderTab.jsx';
+import ScheduledQueueTab from './whatsapp/ScheduledQueueTab.jsx';
+import GMapsExtractorTab from './whatsapp/GMapsExtractorTab.jsx';
+import AutoResponderTab from './whatsapp/AutoResponderTab.jsx';
+import NumberFilterTab from './whatsapp/NumberFilterTab.jsx';
+import GroupToolsTab from './whatsapp/GroupToolsTab.jsx';
+import InteractiveButtonsBuilder from './whatsapp/InteractiveButtonsBuilder.jsx';
+import MediaAttachmentManager from './whatsapp/MediaAttachmentManager.jsx';
+import SpintaxHelper, { resolveSpintaxClient } from './whatsapp/SpintaxHelper.jsx';
 
 function normalizeCustomers(payload) {
   const customers =
@@ -109,25 +128,56 @@ function personalizeMessage(templateMessage, customer) {
 }
 
 export default function WhatsApp() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const currentTab = searchParams.get('tab') || 'bulk';
+
+  const [activeTab, setActiveTab] = useState(currentTab);
+  const [preloadedNumbers, setPreloadedNumbers] = useState([]);
+
+  // Direct Send State (Preserved)
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [selectedSegment, setSelectedSegment] = useState('');
   const [templateType, setTemplateType] = useState('');
   const [message, setMessage] = useState('');
   const [lastDelivery, setLastDelivery] = useState(null);
+  const [singleButtons, setSingleButtons] = useState([]);
+  const [singleMediaFiles, setSingleMediaFiles] = useState([]);
+
+  // Sync tab with URL
+  useEffect(() => {
+    const tabFromUrl = searchParams.get('tab');
+    if (tabFromUrl && tabFromUrl !== activeTab) {
+      setActiveTab(tabFromUrl);
+    }
+  }, [searchParams]);
+
+  const handleTabChange = (tabId) => {
+    setActiveTab(tabId);
+    setSearchParams({ tab: tabId });
+  };
+
+  const handleSendToBulkMarketing = (numbersList) => {
+    setPreloadedNumbers(numbersList);
+    setActiveTab('bulk');
+    setSearchParams({ tab: 'bulk' });
+    toast.success(`Loaded ${numbersList.length} numbers into Bulk Sender!`);
+  };
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['whatsapp-customers'],
     queryFn: () =>
       customersApi.getAll({
-        limit: 100,
+        limit: 200,
         sortBy: 'createdAt',
         sortOrder: 'desc',
       }),
   });
+
   const templatesQuery = useQuery({
     queryKey: ['templates'],
     queryFn: () => templatesApi.getAll(),
   });
+
   const segmentsQuery = useQuery({
     queryKey: ['segments'],
     queryFn: () => segmentsApi.getAll(),
@@ -142,6 +192,7 @@ export default function WhatsApp() {
       [];
     return Array.isArray(list) ? list : [];
   }, [templatesQuery.data]);
+
   const savedSegments = useMemo(() => {
     const list =
       segmentsQuery.data?.data ||
@@ -152,17 +203,17 @@ export default function WhatsApp() {
   }, [segmentsQuery.data]);
 
   const reachableCustomers = useMemo(
-    () =>
-      customers.filter((customer) =>
-        cleanPhoneNumber(customer.phone)
-      ),
+    () => customers.filter((customer) => cleanPhoneNumber(customer.phone)),
     [customers]
   );
+
   const segmentOptions = useMemo(() => {
     const uniqueSegments = [
       ...new Set(
         savedSegments
-          .flatMap((segment) => (Array.isArray(segment?.filters?.segments) ? segment.filters.segments : []))
+          .flatMap((segment) =>
+            Array.isArray(segment?.filters?.segments) ? segment.filters.segments : []
+          )
           .filter(Boolean)
       ),
     ];
@@ -198,7 +249,6 @@ export default function WhatsApp() {
 
   const filteredCustomers = useMemo(() => {
     if (!selectedSegment) return reachableCustomers;
-
     return reachableCustomers.filter(
       (customer) => customer.lifecycle?.segment === selectedSegment
     );
@@ -230,6 +280,8 @@ export default function WhatsApp() {
         preferredLanguage: customer.preferences?.language || 'en',
         channel: 'whatsapp',
         message: outgoingMessage,
+        buttons: singleButtons,
+        media_files: singleMediaFiles,
       }),
 
     onSuccess: (response, variables) => {
@@ -274,6 +326,9 @@ export default function WhatsApp() {
       selectedTemplate?.content?.body ||
       buildTemplateMessage(selectedTemplate?.category, selectedCustomer);
     setMessage(nextMessage);
+    if (selectedTemplate?.content?.buttons?.length) {
+      setSingleButtons(selectedTemplate.content.buttons);
+    }
     toast.success('Message template applied');
   };
 
@@ -339,39 +394,6 @@ export default function WhatsApp() {
     });
   };
 
-  const quickTemplates = useMemo(() => {
-    const categoryIconMap = {
-      loyalty: Gift,
-      rating_request: Star,
-      feedback: MessageSquareQuote,
-      win_back: Sparkles,
-      complaint: MessageCircle,
-      custom: MessageCircle,
-    };
-
-    const categoryDescriptionMap = {
-      loyalty: 'Promote discounts and loyalty deals',
-      rating_request: 'Ask customers for a product or service rating',
-      feedback: 'Collect customer feedback quickly',
-      win_back: 'Reconnect with customers who have gone quiet',
-      complaint: 'Follow up on customer complaints',
-      custom: 'General communication template',
-    };
-
-    return templates.map((template) => {
-      const category = template.category || 'custom';
-
-      return {
-        key: template._id,
-        category,
-        label: template.name || String(category).replace(/_/g, ' '),
-        icon: categoryIconMap[category] || MessageCircle,
-        description:
-          categoryDescriptionMap[category] || 'Use this template for customer communication',
-      };
-    });
-  }, [templates]);
-
   if (isLoading || templatesQuery.isLoading || segmentsQuery.isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -380,379 +402,401 @@ export default function WhatsApp() {
     );
   }
 
+  const tabsConfig = [
+    { id: 'bulk', label: 'Bulk & Unlimited Sender', icon: Layers, badge: 'Popular' },
+    { id: 'scheduled', label: 'Scheduled Queue', icon: Clock },
+    { id: 'gmaps', label: 'Google Maps Extractor', icon: MapPin, badge: 'Hot' },
+    { id: 'auto_responder', label: 'Auto Responder Bot', icon: Bot },
+    { id: 'number_filter', label: 'Number Filter', icon: Filter },
+    { id: 'group_tools', label: 'Group Tools', icon: Users2 },
+    { id: 'single', label: 'Direct 1-on-1 Send', icon: MessageCircle },
+  ];
+
   return (
-    <div>
+    <div className="min-h-screen bg-gray-50/50 pb-16">
       <Header
-        title="WhatsApp Communication"
-        subtitle="Talk to customers through WhatsApp for offers, follow-ups, and rating requests"
+        title="WhatsApp Marketing Suite"
+        subtitle="Complete bulk messaging, Google Maps lead extractor, auto responder, number filter, and group tools"
         actions={
-          <Button variant="outline" onClick={() => refetch()}>
-            Refresh Customers
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => refetch()}>
+              Refresh Data
+            </Button>
+          </div>
         }
       />
 
-      <div className="space-y-6 p-8">
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-          <Card>
-            <CardContent className="flex items-center justify-between p-6">
-              <div>
-                <p className="text-sm text-gray-500">Reachable Customers</p>
-                <p className="mt-2 text-2xl font-semibold text-gray-900">
-                  {formatNumber(reachableCustomers.length)}
-                </p>
-              </div>
-              <Users className="h-6 w-6 text-green-600" />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="flex items-center justify-between p-6">
-              <div>
-                <p className="text-sm text-gray-500">Selected Template</p>
-                <p className="mt-2 text-2xl font-semibold capitalize text-gray-900">
-                  {selectedTemplate?.name || 'No template selected'}
-                </p>
-              </div>
-              <Sparkles className="h-6 w-6 text-primary-600" />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="flex items-center justify-between p-6">
-              <div>
-                <p className="text-sm text-gray-500">Delivery Mode</p>
-                <p className="mt-2 text-2xl font-semibold text-gray-900">
-                  {whatsappProvider === 'meta_cloud' ? 'Meta Cloud' : 'Manual Link'}
-                </p>
-              </div>
-              <MessageCircle className="h-6 w-6 text-gray-700" />
-            </CardContent>
-          </Card>
+      <div className="p-8 space-y-6">
+        {/* Navigation Tabs Bar */}
+        <div className="flex items-center gap-2 overflow-x-auto rounded-2xl border border-gray-200 bg-white p-2 shadow-xs">
+          {tabsConfig.map((t) => {
+            const Icon = t.icon;
+            const isSelected = activeTab === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => handleTabChange(t.id)}
+                className={`flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-semibold transition-all ${
+                  isSelected
+                    ? 'bg-primary-600 text-white shadow-sm'
+                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                }`}
+              >
+                <Icon className={`h-4 w-4 ${isSelected ? 'text-white' : 'text-gray-500'}`} />
+                <span>{t.label}</span>
+                {t.badge && (
+                  <span
+                    className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
+                      isSelected ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-800'
+                    }`}
+                  >
+                    {t.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-          <Card className="xl:col-span-2">
-            <CardHeader>
-              <CardTitle>Message Composer</CardTitle>
-            </CardHeader>
+        {/* TAB 1: BULK & UNLIMITED SENDER */}
+        {activeTab === 'bulk' && (
+          <BulkSenderTab
+            customers={customers}
+            savedSegments={savedSegments}
+            templates={templates}
+            preloadedNumbers={preloadedNumbers}
+            onSwitchToScheduledQueue={() => handleTabChange('scheduled')}
+          />
+        )}
 
-            <CardContent className="space-y-4">
-              {isError ? (
-                <p className="text-sm text-red-500">
-                  Customers could not be loaded. Please refresh and try again.
-                </p>
-              ) : null}
+        {/* TAB 2: SCHEDULED QUEUE & BULK JOBS */}
+        {activeTab === 'scheduled' && <ScheduledQueueTab />}
 
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                <Select
-                  label="Segment"
-                  options={segmentOptions}
-                  value={selectedSegment}
-                  onChange={(e) => {
-                    setSelectedSegment(e.target.value);
-                    setSelectedCustomerId('');
-                  }}
-                />
+        {/* TAB 3: GOOGLE MAPS LEAD EXTRACTOR */}
+        {activeTab === 'gmaps' && (
+          <GMapsExtractorTab onSendToBulkMarketing={handleSendToBulkMarketing} />
+        )}
 
-                <Select
-                  label="Template"
-                  options={templateOptions}
-                  value={templateType}
-                  onChange={(e) => {
-                    const nextTemplateType = e.target.value;
-                    setTemplateType(nextTemplateType);
+        {/* TAB 4: AUTO RESPONDER BOT */}
+        {activeTab === 'auto_responder' && <AutoResponderTab />}
 
-                    const nextTemplate =
-                      templates.find((template) => template._id === nextTemplateType) || null;
-                    setMessage(
-                      nextTemplate?.content?.body ||
-                        buildTemplateMessage(nextTemplate?.category, selectedCustomer)
-                    );
-                  }}
-                />
+        {/* TAB 5: WHATSAPP NUMBER FILTER */}
+        {activeTab === 'number_filter' && (
+          <NumberFilterTab onSendToBulkMarketing={handleSendToBulkMarketing} />
+        )}
 
-                <Select
-                  label="Customer"
-                  options={customerOptions}
-                  value={selectedCustomerId}
-                  onChange={(e) => {
-                    const nextCustomerId = e.target.value;
-                    setSelectedCustomerId(nextCustomerId);
+        {/* TAB 6: GROUP TOOLS (AUTO JOINER & GRAB MEMBERS) */}
+        {activeTab === 'group_tools' && (
+          <GroupToolsTab onSendToBulkMarketing={handleSendToBulkMarketing} />
+        )}
 
-                    const nextCustomer =
-                      filteredCustomers.find(
-                        (customer) => customer._id === nextCustomerId
-                      ) || null;
-
-                    setMessage(
-                      selectedTemplate?.content?.body ||
-                        buildTemplateMessage(selectedTemplate?.category, nextCustomer)
-                    );
-                  }}
-                  placeholder="Choose customer"
-                />
-              </div>
-
-              {selectedCustomer ? (
-                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <p className="font-medium text-gray-900">
-                      {selectedCustomer.name}
-                    </p>
-
-                    <Badge variant="info">
-                      {(selectedCustomer.lifecycle?.segment || 'unassigned').replace(
-                        /_/g,
-                        ' '
-                      )}
-                    </Badge>
-
-                    <span className="text-sm text-gray-500">
-                      {selectedCustomer.phone}
-                    </span>
-                  </div>
-
-                  <p className="mt-2 text-sm text-gray-600">
-                    Last purchase:{' '}
-                    {selectedCustomer.lifecycle?.lastPurchaseDate
-                      ? formatRelativeTime(selectedCustomer.lifecycle.lastPurchaseDate)
-                      : 'No purchase yet'}
-                  </p>
-                </div>
-              ) : null}
-
-              <div>
-                <label
-                  htmlFor="whatsapp-message"
-                  className="mb-2 block text-sm font-medium text-gray-700"
-                >
-                  Message
-                </label>
-
-                <textarea
-                  id="whatsapp-message"
-                  rows={7}
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  placeholder="Write your WhatsApp message here..."
-                  className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3">
-                <Button variant="outline" onClick={applyTemplate}>
-                  Apply Template
-                </Button>
-
-                <Button
-                  onClick={() => handleSendViaApi()}
-                  isLoading={sendWhatsAppMutation.isPending}
-                >
-                  <Send className="mr-2 h-4 w-4" />
-                  Send via API
-                </Button>
-
-                <Button onClick={() => handleOpenWhatsApp()}>
-                  <MessageCircle className="mr-2 h-4 w-4" />
-                  Open WhatsApp
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Send Setup</CardTitle>
-            </CardHeader>
-
-            <CardContent className="space-y-4">
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                <div className="flex items-start gap-3">
-                  <div className="rounded-lg bg-white p-2">
-                    <Globe className="h-5 w-5 text-gray-700" />
-                  </div>
-
+        {/* TAB 7: DIRECT 1-ON-1 SEND (PRESERVED ORIGINAL FUNCTIONALITY) */}
+        {activeTab === 'single' && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+              <Card>
+                <CardContent className="flex items-center justify-between p-6">
                   <div>
-                    <p className="font-medium text-gray-900">API endpoint</p>
-                    <p className="mt-1 break-all text-sm text-gray-500">
-                      {whatsappSendPath}
+                    <p className="text-sm text-gray-500">Reachable Customers</p>
+                    <p className="mt-2 text-2xl font-semibold text-gray-900">
+                      {formatNumber(reachableCustomers.length)}
                     </p>
                   </div>
-                </div>
-              </div>
+                  <Users className="h-6 w-6 text-green-600" />
+                </CardContent>
+              </Card>
 
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                <p className="text-sm font-medium text-gray-900">
-                  Meta Cloud target
-                </p>
+              <Card>
+                <CardContent className="flex items-center justify-between p-6">
+                  <div>
+                    <p className="text-sm text-gray-500">Selected Template</p>
+                    <p className="mt-2 text-2xl font-semibold capitalize text-gray-900">
+                      {selectedTemplate?.name || 'No template selected'}
+                    </p>
+                  </div>
+                  <Sparkles className="h-6 w-6 text-primary-600" />
+                </CardContent>
+              </Card>
 
-                <p className="mt-2 text-sm text-gray-500">
-                  Provider: {whatsappProvider}
-                </p>
+              <Card>
+                <CardContent className="flex items-center justify-between p-6">
+                  <div>
+                    <p className="text-sm text-gray-500">Delivery Mode</p>
+                    <p className="mt-2 text-2xl font-semibold text-gray-900">
+                      {whatsappProvider === 'meta_cloud' ? 'Meta Cloud' : 'Manual Link'}
+                    </p>
+                  </div>
+                  <MessageCircle className="h-6 w-6 text-gray-700" />
+                </CardContent>
+              </Card>
+            </div>
 
-                <p className="mt-1 text-sm text-gray-500">
-                  Graph version: {whatsappGraphVersion}
-                </p>
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+              <Card className="xl:col-span-2">
+                <CardHeader>
+                  <CardTitle>Direct Message Composer</CardTitle>
+                </CardHeader>
 
-                <p className="mt-1 break-all text-sm text-gray-500">
-                  Phone number ID: {whatsappPhoneNumberId || 'Not configured'}
-                </p>
-              </div>
-
-              {lastDelivery ? (
-                <div className="rounded-xl border border-green-200 bg-green-50 p-4">
-                  <p className="text-sm font-medium text-green-800">
-                    Last delivery
-                  </p>
-
-                  <p className="mt-2 text-sm text-green-700">
-                    {lastDelivery.customerName} ({lastDelivery.phone})
-                  </p>
-
-                  <p className="mt-1 text-sm text-green-700">
-                    Sent via{' '}
-                    {lastDelivery.mode === 'api'
-                      ? 'backend API'
-                      : 'manual WhatsApp link'}
-                  </p>
-
-                  {lastDelivery.deliveryMode ? (
-                    <p className="mt-1 text-sm text-green-700">
-                      Meta delivery mode: {lastDelivery.deliveryMode}
+                <CardContent className="space-y-4">
+                  {isError ? (
+                    <p className="text-sm text-red-500">
+                      Customers could not be loaded. Please refresh and try again.
                     </p>
                   ) : null}
-                </div>
-              ) : null}
 
-              <div className="space-y-3">
-                <p className="text-sm font-medium text-gray-900">Quick Use Cases</p>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <Select
+                      label="Segment"
+                      options={segmentOptions}
+                      value={selectedSegment}
+                      onChange={(e) => {
+                        setSelectedSegment(e.target.value);
+                        setSelectedCustomerId('');
+                      }}
+                    />
 
-                {quickTemplates.map((template) => (
-                  <button
-                    key={template.key}
-                    type="button"
-                    className="w-full rounded-xl border border-gray-200 p-4 text-left transition-colors hover:border-primary-300 hover:bg-primary-50"
-                    onClick={() => {
-                      const matchedTemplate = templates.find(
-                        (item) => item._id === template.key
-                      );
-                      if (!matchedTemplate?._id) return;
+                    <Select
+                      label="Template"
+                      options={templateOptions}
+                      value={templateType}
+                      onChange={(e) => {
+                        const nextTemplateType = e.target.value;
+                        setTemplateType(nextTemplateType);
 
-                      setTemplateType(matchedTemplate._id);
-                      setMessage(
-                        matchedTemplate?.content?.body ||
-                          buildTemplateMessage(matchedTemplate.category, selectedCustomer)
-                      );
-                    }}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="rounded-lg bg-gray-100 p-2">
-                        <template.icon className="h-5 w-5 text-gray-700" />
+                        const nextTemplate =
+                          templates.find((template) => template._id === nextTemplateType) || null;
+                        setMessage(
+                          nextTemplate?.content?.body ||
+                            buildTemplateMessage(nextTemplate?.category, selectedCustomer)
+                        );
+                        if (nextTemplate?.content?.buttons?.length) {
+                          setSingleButtons(nextTemplate.content.buttons);
+                        }
+                      }}
+                    />
+
+                    <Select
+                      label="Customer"
+                      options={customerOptions}
+                      value={selectedCustomerId}
+                      onChange={(e) => {
+                        const nextCustomerId = e.target.value;
+                        setSelectedCustomerId(nextCustomerId);
+
+                        const nextCustomer =
+                          filteredCustomers.find(
+                            (customer) => customer._id === nextCustomerId
+                          ) || null;
+
+                        setMessage(
+                          selectedTemplate?.content?.body ||
+                            buildTemplateMessage(selectedTemplate?.category, nextCustomer)
+                        );
+                      }}
+                      placeholder="Choose customer"
+                    />
+                  </div>
+
+                  {selectedCustomer ? (
+                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <p className="font-medium text-gray-900">{selectedCustomer.name}</p>
+
+                        <Badge variant="info">
+                          {(selectedCustomer.lifecycle?.segment || 'unassigned').replace(/_/g, ' ')}
+                        </Badge>
+
+                        <span className="text-sm text-gray-500">{selectedCustomer.phone}</span>
+                      </div>
+
+                      <p className="mt-2 text-sm text-gray-600">
+                        Last purchase:{' '}
+                        {selectedCustomer.lifecycle?.lastPurchaseDate
+                          ? formatRelativeTime(selectedCustomer.lifecycle.lastPurchaseDate)
+                          : 'No purchase yet'}
+                      </p>
+                    </div>
+                  ) : null}
+
+                  <div>
+                    <label
+                      htmlFor="whatsapp-message"
+                      className="mb-2 block text-sm font-medium text-gray-700"
+                    >
+                      Message Body
+                    </label>
+
+                    <textarea
+                      id="whatsapp-message"
+                      rows={6}
+                      value={message}
+                      onChange={(e) => setMessage(e.target.value)}
+                      placeholder="Write your WhatsApp message here..."
+                      className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+
+                  {/* Personalization helper */}
+                  <SpintaxHelper
+                    message={message}
+                    onInsertToken={(tok) => setMessage((prev) => `${prev} ${tok}`)}
+                  />
+
+                  {/* Interactive Buttons (Feature 4: Add Button) */}
+                  <InteractiveButtonsBuilder buttons={singleButtons} onChange={setSingleButtons} />
+
+                  {/* Media files (Feature 8) */}
+                  <MediaAttachmentManager mediaFiles={singleMediaFiles} onChange={setSingleMediaFiles} />
+
+                  <div className="flex flex-wrap items-center gap-3 pt-2">
+                    <Button variant="outline" onClick={applyTemplate}>
+                      Apply Template
+                    </Button>
+
+                    <Button
+                      onClick={() => handleSendViaApi()}
+                      isLoading={sendWhatsAppMutation.isPending}
+                    >
+                      <Send className="mr-2 h-4 w-4" />
+                      Send via API
+                    </Button>
+
+                    <Button onClick={() => handleOpenWhatsApp()}>
+                      <MessageCircle className="mr-2 h-4 w-4" />
+                      Open WhatsApp
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Send Setup & Diagnostics</CardTitle>
+                </CardHeader>
+
+                <CardContent className="space-y-4">
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-lg bg-white p-2">
+                        <Globe className="h-5 w-5 text-gray-700" />
                       </div>
 
                       <div>
-                        <p className="font-medium text-gray-900">
-                          {template.label}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          {template.description}
-                        </p>
+                        <p className="font-medium text-gray-900">API endpoint</p>
+                        <p className="mt-1 break-all text-sm text-gray-500">{whatsappSendPath}</p>
                       </div>
                     </div>
-                  </button>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                  </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>WhatsApp Ready Customers</CardTitle>
-          </CardHeader>
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                    <p className="text-sm font-medium text-gray-900">Meta Cloud target</p>
+                    <p className="mt-2 text-sm text-gray-500">Provider: {whatsappProvider}</p>
+                    <p className="mt-1 text-sm text-gray-500">Graph version: {whatsappGraphVersion}</p>
+                    <p className="mt-1 break-all text-sm text-gray-500">
+                      Phone number ID: {whatsappPhoneNumberId || 'Not configured'}
+                    </p>
+                  </div>
 
-          <CardContent className="p-0">
-            {filteredCustomers.length ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Phone</TableHead>
-                    <TableHead>Segment</TableHead>
-                    <TableHead>Total Spent</TableHead>
-                    <TableHead>Last Activity</TableHead>
-                    <TableHead className="text-right">Action</TableHead>
-                  </TableRow>
-                </TableHeader>
+                  {lastDelivery ? (
+                    <div className="rounded-xl border border-green-200 bg-green-50 p-4">
+                      <p className="text-sm font-medium text-green-800">Last delivery</p>
+                      <p className="mt-2 text-sm text-green-700">
+                        {lastDelivery.customerName} ({lastDelivery.phone})
+                      </p>
+                      <p className="mt-1 text-sm text-green-700">
+                        Sent via {lastDelivery.mode === 'api' ? 'backend API' : 'manual WhatsApp link'}
+                      </p>
+                      {lastDelivery.deliveryMode ? (
+                        <p className="mt-1 text-sm text-green-700">
+                          Meta delivery mode: {lastDelivery.deliveryMode}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </CardContent>
+              </Card>
+            </div>
 
-                <TableBody>
-                  {filteredCustomers.slice(0, 12).map((customer) => (
-                    <TableRow key={customer._id}>
-                      <TableCell>
-                        <div>
-                          <p className="font-medium text-gray-900">
-                            {customer.name}
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            {customer.email || 'No email'}
-                          </p>
-                        </div>
-                      </TableCell>
+            <Card>
+              <CardHeader>
+                <CardTitle>WhatsApp Ready Customers</CardTitle>
+              </CardHeader>
 
-                      <TableCell>
-                        <div className="flex items-center gap-2 text-sm text-gray-700">
-                          <Phone className="h-4 w-4 text-gray-400" />
-                          {customer.phone}
-                        </div>
-                      </TableCell>
+              <CardContent className="p-0">
+                {filteredCustomers.length ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Customer</TableHead>
+                        <TableHead>Phone</TableHead>
+                        <TableHead>Segment</TableHead>
+                        <TableHead>Total Spent</TableHead>
+                        <TableHead>Last Activity</TableHead>
+                        <TableHead className="text-right">Action</TableHead>
+                      </TableRow>
+                    </TableHeader>
 
-                      <TableCell>
-                        <Badge variant="default">
-                          {(customer.lifecycle?.segment || 'unassigned').replace(
-                            /_/g,
-                            ' '
-                          )}
-                        </Badge>
-                      </TableCell>
+                    <TableBody>
+                      {filteredCustomers.slice(0, 12).map((customer) => (
+                        <TableRow key={customer._id}>
+                          <TableCell>
+                            <div>
+                              <p className="font-medium text-gray-900">{customer.name}</p>
+                              <p className="text-sm text-gray-500">{customer.email || 'No email'}</p>
+                            </div>
+                          </TableCell>
 
-                      <TableCell>
-                        {formatCurrency(customer.lifecycle?.totalSpent || 0)}
-                      </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2 text-sm text-gray-700">
+                              <Phone className="h-4 w-4 text-gray-400" />
+                              {customer.phone}
+                            </div>
+                          </TableCell>
 
-                      <TableCell>
-                        {customer.lifecycle?.lastPurchaseDate
-                          ? formatRelativeTime(customer.lifecycle.lastPurchaseDate)
-                          : 'No recent purchase'}
-                      </TableCell>
+                          <TableCell>
+                            <Badge variant="default">
+                              {(customer.lifecycle?.segment || 'unassigned').replace(/_/g, ' ')}
+                            </Badge>
+                          </TableCell>
 
-                      <TableCell className="text-right">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedCustomerId(customer._id);
-                            setMessage(
-                              selectedTemplate?.content?.body ||
-                                buildTemplateMessage(selectedTemplate?.category, customer)
-                            );
-                            handleSendViaApi(customer);
-                          }}
-                        >
-                          Send
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <div className="px-6 py-10 text-center text-sm text-gray-500">
-                No customers with WhatsApp-ready phone numbers were found for this filter.
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                          <TableCell>{formatCurrency(customer.lifecycle?.totalSpent || 0)}</TableCell>
+
+                          <TableCell>
+                            {customer.lifecycle?.lastPurchaseDate
+                              ? formatRelativeTime(customer.lifecycle.lastPurchaseDate)
+                              : 'No recent purchase'}
+                          </TableCell>
+
+                          <TableCell className="text-right">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedCustomerId(customer._id);
+                                setMessage(
+                                  selectedTemplate?.content?.body ||
+                                    buildTemplateMessage(selectedTemplate?.category, customer)
+                                );
+                                handleSendViaApi(customer);
+                              }}
+                            >
+                              Send
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className="px-6 py-10 text-center text-sm text-gray-500">
+                    No customers with WhatsApp-ready phone numbers were found for this filter.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
     </div>
   );
