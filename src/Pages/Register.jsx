@@ -147,6 +147,7 @@ export default function Register() {
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               required
+              autoComplete="email"
             />
 
             <Input
@@ -156,6 +157,7 @@ export default function Register() {
               value={formData.password}
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
               required
+              autoComplete="new-password"
             />
 
             <Button type="submit" className="w-full bg-amber-500" isLoading={isLoading}>
