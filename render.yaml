@@ -1,8 +1,9 @@
-services:
+﻿services:
   - type: web
     name: cbd-frontend
     runtime: static
-    buildCommand: npm install && npm run build
+    autoDeployTrigger: checksPass
+    buildCommand: npm ci && npm run build
     staticPublishPath: ./dist
     routes:
       - type: rewrite
@@ -15,3 +16,4 @@ services:
         sync: false
       - key: VITE_ENABLE_SOCKET_PROGRESS
         value: "true"
+

@@ -1,0 +1,143 @@
+name: Frontend CD
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Prevent overlapping publishing and deployment runs within this repository.
+concurrency:
+  group: frontend-production
+  cancel-in-progress: false
+
+env:
+  IMAGE_NAME: cbdp-frontend
+  REGISTRY: ghcr.io
+
+jobs:
+  validate:
+    uses: ./.github/workflows/frontend-ci.yml
+
+  build-and-push:
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_repo: ${{ steps.image.outputs.repository }}
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Normalize image repository
+        id: image
+        env:
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+        run: |
+          owner_lc="${REPOSITORY_OWNER,,}"
+          echo "repository=${REGISTRY}/${owner_lc}/${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: production
+          push: true
+          build-args: |
+            VITE_BACKEND_URL=/
+            VITE_API_URL=/
+            VITE_ENABLE_SOCKET_PROGRESS=true
+          tags: |
+            ${{ steps.image.outputs.repository }}:latest
+            ${{ steps.image.outputs.repository }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+    steps:
+      - name: Check deployment configuration
+        id: config
+        shell: bash
+        run: |
+          configured=0
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_PATH; do
+            if [[ -n "${!name}" ]]; then
+              configured=$((configured + 1))
+            fi
+          done
+          if [[ "$configured" -eq 0 ]]; then
+            echo "Deployment skipped: no DEPLOY_* secrets configured." >> "$GITHUB_STEP_SUMMARY"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          elif [[ "$configured" -ne 4 ]]; then
+            echo "::error::Configure all four DEPLOY_* secrets, or remove all four to disable SSH deployment."
+            exit 1
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy over SSH
+        if: steps.config.outputs.ready == 'true'
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          DEPLOY_IMAGE: ${{ needs.build-and-push.outputs.image_repo }}@${{ needs.build-and-push.outputs.digest }}
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          host: ${{ env.DEPLOY_HOST }}
+          username: ${{ env.DEPLOY_USER }}
+          key: ${{ env.DEPLOY_SSH_KEY }}
+          envs: DEPLOY_PATH,DEPLOY_IMAGE,GHCR_USERNAME,GHCR_TOKEN,REGISTRY
+          command_timeout: 10m
+          script: |
+            set -eu
+            cd "$DEPLOY_PATH"
+            test -f docker-compose.yml
+            test -f .env.docker
+            # Both repositories use this server lock when updating the shared stack.
+            command -v flock >/dev/null
+            exec 9>".cbd-deploy.lock"
+            flock -w 300 9
+            # Use a temporary override: local Compose builds remain unchanged.
+            override=$(mktemp)
+            docker_config=$(mktemp -d)
+            trap 'rm -f "$override"; rm -rf "$docker_config"' EXIT
+            export DOCKER_CONFIG="$docker_config"
+            printf 'services:\n  frontend-prod:\n    image: %s\n' "$DEPLOY_IMAGE" > "$override"
+            printf '%s' "$GHCR_TOKEN" | docker login "$REGISTRY" -u "$GHCR_USERNAME" --password-stdin
+            docker compose --env-file .env.docker -f docker-compose.yml -f "$override" --profile prod config --quiet
+            # The backend stack must already be running on this server.
+            docker compose --env-file .env.docker -f docker-compose.yml -f "$override" --profile prod ps --status running --services backend-prod | grep -qx backend-prod
+            docker compose --env-file .env.docker -f docker-compose.yml -f "$override" --profile prod pull frontend-prod
+            docker compose --env-file .env.docker -f docker-compose.yml -f "$override" --profile prod up -d --no-deps --no-build --wait --wait-timeout 120 frontend-prod
