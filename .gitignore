@@ -1,6 +1,8 @@
 # Environment variables (CRITICAL)
 .env
 .env.*
+!.env.example
+!.env.docker.example
 
 # Logs
 logs

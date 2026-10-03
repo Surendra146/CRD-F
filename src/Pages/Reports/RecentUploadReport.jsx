@@ -125,7 +125,7 @@ export default function RecentUploadReport() {
 
   return (
     <div className="min-h-screen bg-white">
-      <div className="p-6 md:p-8">
+      <div className="p-6 md:p-4 sm:p-6 lg:p-8">
         <div className="mb-8">
           <h1 className="text-3xl font-black tracking-tighter sm:text-4xl">Reports</h1>
           <p className="mt-2 text-sm text-gray-600 sm:text-base">

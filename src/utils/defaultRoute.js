@@ -18,7 +18,7 @@ const moduleRouteByKey = {
   roles: '/roles',
   users: '/users',
   settings: '/settings',
-  'custom-dashboards': '/dashboards',
+  'custom-dashboards': '/dashboard',
 };
 
 const defaultRoutePriority = [

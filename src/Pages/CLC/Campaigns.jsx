@@ -283,7 +283,7 @@ export default function Campaigns() {
         title="Campaigns"
         subtitle="Create, target, and track outbound campaigns"
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {canManageCampaigns ? (
               <>
                 <Button
@@ -301,7 +301,7 @@ export default function Campaigns() {
         }
       />
 
-      <div className="space-y-6 p-8">
+      <div className="space-y-6 p-4 sm:p-6 lg:p-8">
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           <Card>
             <CardContent className="flex items-center justify-between p-6">

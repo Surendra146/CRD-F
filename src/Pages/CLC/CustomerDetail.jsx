@@ -100,7 +100,7 @@ export default function CustomerDetail() {
     return (
       <div>
         <Header title="Customer Detail" subtitle="View individual customer information" />
-        <div className="p-8">
+        <div className="p-4 sm:p-6 lg:p-8">
           <Card>
             <CardContent className="space-y-4 py-10 text-center">
               <p className="text-red-500">Unable to load this customer.</p>
@@ -161,7 +161,7 @@ export default function CustomerDetail() {
         }
       />
 
-      <div className="space-y-6 p-8">
+      <div className="space-y-6 p-4 sm:p-6 lg:p-8">
         <Card>
           <CardContent className="flex flex-col gap-6 p-6 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex items-start gap-4">

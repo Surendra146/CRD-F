@@ -222,7 +222,7 @@ export default function CustomersTable({
       </Table>
 
       {data.pagination ? (
-        <div className="flex items-center justify-between border-t px-6 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t px-6 py-4">
           <p className="text-sm text-gray-500">
             Showing {((data.pagination.page - 1) * data.pagination.limit) + 1} to{' '}
             {Math.min(data.pagination.page * data.pagination.limit, data.pagination.total)} of{' '}

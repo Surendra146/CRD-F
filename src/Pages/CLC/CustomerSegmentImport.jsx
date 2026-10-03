@@ -115,7 +115,7 @@ export default function CustomerSegmentImport() {
         subtitle="Generate template, import and validate, then save valid segment updates"
       />
 
-      <div className="space-y-6 p-8">
+      <div className="space-y-6 p-4 sm:p-6 lg:p-8">
         <Card>
           <CardHeader>
             <CardTitle>Import Actions</CardTitle>
@@ -227,7 +227,7 @@ export default function CustomerSegmentImport() {
         {errorRows.length ? (
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <CardTitle>Error List</CardTitle>
                 <Button type="button" variant="outline" onClick={handleExportErrors}>
                   <Download className="mr-2 h-4 w-4" />

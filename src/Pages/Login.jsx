@@ -45,7 +45,7 @@ export default function Login() {
           <p className="mt-2 text-gray-500">Sign in to your account</p>
         </div>
 
-        <div className="rounded-xl border bg-white p-8 shadow-sm">
+        <div className="rounded-xl border bg-white p-4 sm:p-6 lg:p-8 shadow-sm">
           <form onSubmit={handleSubmit} className="space-y-6">
             <Input
               label="Email"

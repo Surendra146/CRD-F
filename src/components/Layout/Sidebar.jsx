@@ -9,7 +9,7 @@ import { canAccessModule } from '../../utils/rbac';
 
 const SIDEBAR_EXPANDED_STORAGE_KEY = 'sidebar-expanded-parents-v1';
 
-export default function Sidebar() {
+export default function Sidebar({ mobile = false, onNavigate }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
@@ -77,13 +77,14 @@ export default function Sidebar() {
   }, [expandedParentKey]);
 
   const handleLogout = () => {
+    onNavigate?.();
     logout();
     navigate('/login');
   };
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-64 bg-gray-900 text-white flex flex-col">
-      <div className="px-6 py-5 border-b border-gray-800">
+    <aside className={cn("flex flex-col bg-gray-900 text-white", mobile ? "h-dvh w-full" : "fixed left-0 top-0 z-30 hidden h-dvh w-64 lg:flex")}>
+      <div className="px-6 py-5 pr-12 border-b border-gray-800">
         <h1 className="text-xl font-bold">HanuRam clc solutions</h1>
         <p className="text-xs text-gray-400 mt-1">Lifecycle Management</p>
       </div>
@@ -101,6 +102,7 @@ export default function Sidebar() {
               <NavLink
                 key={item.key}
                 to={item.href}
+                onClick={onNavigate}
                 className={({ isActive }) =>
                   cn(
                     'flex items-center px-4 py-2.5 rounded-lg text-sm font-medium transition-colors',
@@ -149,6 +151,7 @@ export default function Sidebar() {
                     <NavLink
                       key={child.key}
                       to={child.href}
+                      onClick={onNavigate}
                       className={({ isActive }) =>
                         cn(
                           'flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors',

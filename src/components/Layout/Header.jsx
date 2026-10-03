@@ -83,15 +83,15 @@ export default function Header({ title, subtitle, actions }) {
   }, [showNotifications]);
 
   return (
-    <header className="border-b border-gray-200 bg-white px-8 py-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
+    <header className="border-b border-gray-200 bg-white px-4 py-4 sm:px-6 lg:px-8">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="min-w-0 flex-1 basis-48">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{title}</h1>
           {subtitle ? <p className="mt-1 text-sm text-gray-500">{subtitle}</p> : null}
         </div>
 
-        <div className="flex items-center space-x-4">
-          <div className="relative hidden md:block">
+        <div className="flex max-w-full flex-wrap items-center gap-2 sm:gap-4">
+          <div className="relative hidden xl:block">
             <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
@@ -119,7 +119,7 @@ export default function Header({ title, subtitle, actions }) {
             </button>
 
             {showNotifications ? (
-              <div className="absolute right-0 top-12 z-30 w-96 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl">
+              <div className="fixed left-4 right-4 top-36 z-30 sm:absolute sm:left-auto sm:right-0 sm:top-12 sm:w-96 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl">
                 <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
                   <div>
                     <p className="font-semibold text-gray-900">Notifications</p>
@@ -145,7 +145,7 @@ export default function Header({ title, subtitle, actions }) {
                   </div>
                 </div>
 
-                <div className="max-h-96 overflow-y-auto">
+                <div className="max-h-[min(24rem,60dvh)] overflow-y-auto">
                   {isLoading ? (
                     <div className="flex items-center justify-center px-4 py-10 text-sm text-gray-500">
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -167,7 +167,7 @@ export default function Header({ title, subtitle, actions }) {
                           <notification.icon className={`h-5 w-5 ${notification.iconColor}`} />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-start justify-between gap-3">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
                             <p className="font-medium text-gray-900">{notification.title}</p>
                             <span className="whitespace-nowrap text-xs text-gray-400">
                               {notification.createdAt

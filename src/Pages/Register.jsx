@@ -88,7 +88,7 @@ export default function Register() {
           <p className="mt-2 text-gray-500">Create your account</p>
         </div>
 
-        <div className="rounded-xl border bg-white p-8 shadow-sm">
+        <div className="rounded-xl border bg-white p-4 sm:p-6 lg:p-8 shadow-sm">
           <form onSubmit={otpStep ? handleOtpSubmit : handleSubmit} className="space-y-6">
             {otpStep ? (
               <>

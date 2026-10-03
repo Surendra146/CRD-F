@@ -22,11 +22,7 @@ const CustomerSegmentImport = lazy(() => import('../Pages/CLC/CustomerSegmentImp
 const Settings = lazy(() => import('../Pages/CLC/Settings'));
 const Roles = lazy(() => import('../Pages/Roles'));
 const Users = lazy(() => import('../Pages/Users'));
-const SalesDashboard = lazy(() => import('../Pages/CustomDashboards/SalesDashboard'));
 const RecentUploadReport = lazy(() => import('../Pages/Reports/RecentUploadReport'));
-const CustomDashboardUpload = lazy(() => import('../Pages/CustomDashboards/excelupload'));
-const CustomDashboardMapping = lazy(() => import('../Pages/CustomDashboards/ColumnMapping'));
-const CustomDashboardBuilder = lazy(() => import('../Pages/CustomDashboards/DashboardBuilder'));
 
 function RouteFallback() {
   return (
@@ -78,11 +74,6 @@ export default function AppRoutes() {
         <Route path="/users" element={<PageLoader><ModuleRoute moduleKey="users"><Users /></ModuleRoute></PageLoader>} />
 
         <Route path="/reports/recent-upload" element={<PageLoader><ModuleRoute moduleKey="reports"><RecentUploadReport /></ModuleRoute></PageLoader>} />
-        <Route path="/custom-dashboards/sales" element={<PageLoader><ModuleRoute moduleKey="custom-dashboards"><SalesDashboard /></ModuleRoute></PageLoader>} />
-        <Route path="/dashboards" element={<Navigate to="/custom-dashboards/sales" replace />} />
-        <Route path="/dashboards/:id/upload" element={<PageLoader><ModuleRoute moduleKey="custom-dashboards"><CustomDashboardUpload /></ModuleRoute></PageLoader>} />
-        <Route path="/dashboards/:id/map-columns" element={<PageLoader><ModuleRoute moduleKey="custom-dashboards"><CustomDashboardMapping /></ModuleRoute></PageLoader>} />
-        <Route path="/dashboards/:id" element={<PageLoader><ModuleRoute moduleKey="custom-dashboards"><CustomDashboardBuilder /></ModuleRoute></PageLoader>} />
       </Route>
 
       <Route path="/" element={<DefaultRouteRedirect />} />

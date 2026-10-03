@@ -538,7 +538,7 @@ export default function Import() {
         subtitle="Upload customer detail or customer sales data from CSV or Excel files"
       />
 
-      <div className="p-8">
+      <div className="p-4 sm:p-6 lg:p-8">
         <ImportStepper step={step} />
 
         {step === 1 ? (

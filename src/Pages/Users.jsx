@@ -159,7 +159,7 @@ export default function Users() {
         subtitle="Create login users and assign the correct role profile with sidebar visibility."
       />
 
-      <div className="grid grid-cols-1 gap-6 p-8 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 p-4 sm:p-6 lg:p-8 xl:grid-cols-3">
         <Card className="xl:col-span-1">
           <CardHeader>
             <CardTitle>Create User</CardTitle>

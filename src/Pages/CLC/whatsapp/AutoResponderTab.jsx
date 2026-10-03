@@ -255,7 +255,7 @@ export default function AutoResponderTab() {
                   </TableBody>
                 </Table>
               ) : (
-                <div className="p-8 text-center text-sm text-gray-500">
+                <div className="p-4 sm:p-6 lg:p-8 text-center text-sm text-gray-500">
                   No auto-responder rules defined yet. Click "Add Auto-Reply Rule" to create your first keyword bot!
                 </div>
               )}

@@ -11,7 +11,7 @@ const Select = forwardRef(({
   ...props
 }, ref) => {
   return (
-    <div className="space-y-1.5">
+    <div className="min-w-0 space-y-1.5">
       {label && (
         <label className="block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
           {label}
@@ -21,7 +21,7 @@ const Select = forwardRef(({
         <select
           ref={ref}
           className={cn(
-            'block w-full appearance-none rounded-xl border px-4 py-2.5 pr-10',
+            'block min-w-0 w-full appearance-none rounded-xl border px-4 py-2.5 pr-10',
             'bg-white/95 shadow-sm',
             'focus:border-primary-300 focus:outline-none focus:ring-4 focus:ring-primary-100',
             'transition-all duration-200',

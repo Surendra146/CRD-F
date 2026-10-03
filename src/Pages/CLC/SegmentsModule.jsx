@@ -198,7 +198,7 @@ export default function SegmentsModule() {
         }
       />
 
-      <div className="p-8">
+      <div className="p-4 sm:p-6 lg:p-8">
         <Card>
           <CardHeader>
             <CardTitle>Saved Segments</CardTitle>

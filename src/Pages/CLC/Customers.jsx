@@ -129,7 +129,7 @@ export default function Customers({ moduleType = 'customer_details' }) {
         }
       />
 
-      <div className="p-8">
+      <div className="p-4 sm:p-6 lg:p-8">
         <Card className="mb-6">
           <CustomersFilters
             filters={filters}
@@ -163,7 +163,7 @@ export default function Customers({ moduleType = 'customer_details' }) {
                   : 'Get started by adding your first customer or importing data'
               }
               action={
-                <div className="flex gap-3">
+                <div className="flex flex-wrap gap-3">
                   {!isSalesModule ? (
                     <Link to="/customers/new">
                       <Button>

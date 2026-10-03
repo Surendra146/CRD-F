@@ -1,5 +1,4 @@
 import {
-  BarChart3,
   LayoutDashboard,
   ChevronRight,
   PanelsTopLeft,
@@ -62,23 +61,6 @@ export const sidebarModules = [
         accessKey: 'reports',
         label: 'Recent Upload Report',
         href: '/reports/recent-upload',
-        icon: ChevronRight,        enabled: true,
-      },
-    ],
-    enabled: true,
-  },
-
-  {
-    key: 'custom-dashboards-parent',
-    accessKey: 'custom-dashboards',
-    label: 'Custom Dashboard',
-    href: '/custom-dashboards/sales',
-    icon: PanelsTopLeft,    children: [
-      {
-        key: 'custom-dashboards-sales-child',
-        accessKey: 'custom-dashboards',
-        label: 'Sales Dashboard',
-        href: '/custom-dashboards/sales',
         icon: ChevronRight,        enabled: true,
       },
     ],

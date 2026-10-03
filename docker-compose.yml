@@ -1,129 +1,142 @@
+name: cbd
+
+x-backend-build: &backend-build
+  context: ${BACKEND_PATH:-../../Python/CBD_Python}
+  dockerfile: Dockerfile
+
+x-backend-environment: &backend-environment
+  DATABASE_URL: postgresql+psycopg://cbd:${POSTGRES_PASSWORD:?Run npm run docker:init first}@postgres:5432/cm_db
+  JWT_SECRET: ${JWT_SECRET:?Run npm run docker:init first}
+  JWT_ALGORITHM: HS256
+  JWT_EXPIRES_MINUTES: "1440"
+  AUTO_CREATE_TABLES: "true"
+  REDIS_URL: redis://redis:6379/0
+  ENABLE_REDIS_PROGRESS: "true"
+  ENABLE_SOCKET_PROGRESS: "true"
+  CORS_ORIGINS: http://localhost,http://localhost:${FRONTEND_PORT:-80},http://localhost:5173,http://127.0.0.1:5173
+
+x-backend-dependencies: &backend-dependencies
+  postgres:
+    condition: service_healthy
+  redis:
+    condition: service_healthy
+
 services:
-  mongo:
-    image: mongo:7
-    container_name: cbdp-mongo
-    profiles: ["dev", "test", "prod"]
+  postgres:
+    image: postgres:17-alpine
+    profiles: [dev, prod]
     restart: unless-stopped
     environment:
-      MONGO_INITDB_DATABASE: cbdp
-    ports:
-      - "27017:27017"
+      POSTGRES_DB: cm_db
+      POSTGRES_USER: cbd
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run npm run docker:init first}
     volumes:
-      - mongo_data:/data/db
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "mongosh --quiet --eval \"db.adminCommand('ping').ok\" | grep 1"]
-      interval: 15s
+      test: [CMD-SHELL, 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
       start_period: 20s
 
-  backend-dev:
-    build:
-      context: ../../node/CBDP_node
-      dockerfile: Dockerfile
-      target: dev
-    container_name: cbdp-backend-dev
-    profiles: ["dev"]
-    environment:
-      NODE_ENV: development
-      PORT: 5001
-      MONGODB_URI: mongodb://mongo:27017/cbdp_dev
-      CORS_ORIGINS: http://localhost:5173
-    ports:
-      - "5001:5001"
-    depends_on:
-      mongo:
-        condition: service_healthy
+  redis:
+    image: redis:7-alpine
+    profiles: [dev, prod]
+    restart: unless-stopped
+    command: [redis-server, --appendonly, "yes"]
     volumes:
-      - ../../node/CBDP_node:/app
-      - backend_node_modules:/app/node_modules
-      - backend_uploads:/app/uploads
-    command: npm run dev
+      - redis_data:/data
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend-dev:
+    profiles: [dev]
+    build:
+      <<: *backend-build
+      target: dev
+    environment:
+      <<: *backend-environment
+      ENVIRONMENT: development
+      WATCHFILES_FORCE_POLLING: "true"
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - ${BACKEND_PATH:-../../Python/CBD_Python}/app:/app/app
+    depends_on: *backend-dependencies
 
   frontend-dev:
+    profiles: [dev]
     build:
       context: .
-      dockerfile: Dockerfile
       target: dev
-    container_name: cbdp-frontend-dev
-    profiles: ["dev"]
     environment:
-      VITE_BACKEND_URL: http://localhost:5001
+      VITE_BACKEND_URL: /
+      VITE_API_URL: /
+      VITE_ENABLE_SOCKET_PROGRESS: "true"
+      DOCKER_BACKEND_URL: http://backend-dev:8000
+      DOCKER_WATCH_POLLING: "true"
     ports:
-      - "5173:5173"
-    depends_on:
-      - backend-dev
+      - "127.0.0.1:5173:5173"
     volumes:
       - .:/app
       - frontend_node_modules:/app/node_modules
-    command: npm run dev -- --host 0.0.0.0 --port 5173
-
-  backend-test:
-    build:
-      context: ../../node/CBDP_node
-      dockerfile: Dockerfile
-      target: test
-    container_name: cbdp-backend-test
-    profiles: ["test"]
-    environment:
-      NODE_ENV: test
-      PORT: 5001
-      MONGODB_URI: mongodb://mongo:27017/cbdp_test
-      CORS_ORIGINS: http://localhost:5173
     depends_on:
-      mongo:
+      backend-dev:
         condition: service_healthy
-    command: npm run test:ci
-
-  frontend-test:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: test
-    container_name: cbdp-frontend-test
-    profiles: ["test"]
-    environment:
-      VITE_BACKEND_URL: http://backend-test:5001
-    depends_on:
-      - backend-test
-    command: npm run test:ci
 
   backend-prod:
+    profiles: [prod]
     build:
-      context: ../../node/CBDP_node
-      dockerfile: Dockerfile
+      <<: *backend-build
       target: production
-    container_name: cbdp-backend-prod
-    profiles: ["prod"]
     restart: unless-stopped
     environment:
-      NODE_ENV: production
-      PORT: 5001
-      MONGODB_URI: mongodb://mongo:27017/cbdp_prod
-      CORS_ORIGINS: http://localhost
+      <<: *backend-environment
+      ENVIRONMENT: production
     expose:
-      - "5001"
-    depends_on:
-      mongo:
-        condition: service_healthy
-    volumes:
-      - backend_uploads:/app/uploads
+      - "8000"
+    depends_on: *backend-dependencies
 
   frontend-prod:
+    profiles: [prod]
     build:
       context: .
-      dockerfile: Dockerfile
       target: production
-    container_name: cbdp-frontend-prod
-    profiles: ["prod"]
+      args:
+        VITE_BACKEND_URL: /
+        VITE_API_URL: /
+        VITE_ENABLE_SOCKET_PROGRESS: "true"
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "${FRONTEND_PORT:-80}:80"
     depends_on:
-      - backend-prod
+      backend-prod:
+        condition: service_healthy
+
+  backend-test:
+    profiles: [test]
+    build:
+      <<: *backend-build
+      target: test
+    environment:
+      DATABASE_URL: postgresql+psycopg://cbd:test@localhost:5432/cm_db
+      ENABLE_REDIS_PROGRESS: "false"
+      ENABLE_SOCKET_PROGRESS: "true"
+
+  frontend-test:
+    profiles: [test]
+    build:
+      context: .
+      target: test
+    environment:
+      VITE_BACKEND_URL: /
+      VITE_API_URL: /
+      VITE_ENABLE_SOCKET_PROGRESS: "true"
 
 volumes:
-  mongo_data:
+  postgres_data:
+  redis_data:
   frontend_node_modules:
-  backend_node_modules:
-  backend_uploads:

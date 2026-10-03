@@ -217,7 +217,7 @@ export default function ScheduledQueueTab() {
               </TableBody>
             </Table>
           ) : (
-            <div className="p-8 text-center text-sm text-gray-500">
+            <div className="p-4 sm:p-6 lg:p-8 text-center text-sm text-gray-500">
               No broadcast jobs or scheduled messages found. Create one in the Bulk Sender tab!
             </div>
           )}

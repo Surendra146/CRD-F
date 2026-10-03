@@ -8,7 +8,7 @@ import { io } from 'socket.io-client';
 const backendOrigin =
   import.meta.env.VITE_BACKEND_URL ||
   import.meta.env.VITE_API_URL ||
-  'http://localhost:8000';
+  (import.meta.env.PROD ? '/' : 'http://localhost:8000');
 
 export const BASE_URL = backendOrigin.replace(/\/$/, '');
 export const SOCKET_URL = BASE_URL;

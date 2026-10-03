@@ -426,7 +426,7 @@ export default function WhatsApp() {
         }
       />
 
-      <div className="p-8 space-y-6">
+      <div className="p-4 sm:p-6 lg:p-8 space-y-6">
         {/* Navigation Tabs Bar */}
         <div className="flex items-center gap-2 overflow-x-auto rounded-2xl border border-gray-200 bg-white p-2 shadow-xs">
           {tabsConfig.map((t) => {

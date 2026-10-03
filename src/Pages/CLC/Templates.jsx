@@ -308,7 +308,7 @@ export default function Templates() {
         title="Templates"
         subtitle="Create reusable WhatsApp messaging templates"
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => templatesQuery.refetch()}>
               Refresh
             </Button>
@@ -323,7 +323,7 @@ export default function Templates() {
         }
       />
 
-      <div className="p-8 space-y-6">
+      <div className="p-4 sm:p-6 lg:p-8 space-y-6">
         <Card>
           <CardHeader>
             <CardTitle>Template Library</CardTitle>
@@ -493,12 +493,12 @@ export default function Templates() {
 
           {/* Interactive Buttons (Feature 4: Add Button) */}
           <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-medium text-gray-900">Interactive WhatsApp Buttons</p>
                 <p className="text-xs text-gray-500">Add Quick Replies or Call-To-Action (URL/Phone) buttons</p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Button type="button" size="sm" variant="outline" onClick={() => addButton('quick_reply')} disabled={form.buttons.length >= 3}>
                   + Quick Reply
                 </Button>
@@ -514,13 +514,13 @@ export default function Templates() {
             {form.buttons.length > 0 ? (
               <div className="space-y-2">
                 {form.buttons.map((btn, idx) => (
-                  <div key={btn.id || idx} className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white p-2">
+                  <div key={btn.id || idx} className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white p-2">
                     <span className="rounded bg-primary-100 px-2 py-0.5 text-xs font-semibold text-primary-700 uppercase">
                       {btn.type.replace('_', ' ')}
                     </span>
                     <input
                       type="text"
-                      className="flex-1 rounded border border-gray-300 px-2 py-1 text-xs text-gray-800"
+                      className="min-w-0 flex-1 basis-40 rounded border border-gray-300 px-2 py-1 text-xs text-gray-800"
                       placeholder="Button Title"
                       value={btn.text}
                       onChange={(e) => updateButton(idx, 'text', e.target.value)}
@@ -528,7 +528,7 @@ export default function Templates() {
                     {btn.type !== 'quick_reply' ? (
                       <input
                         type="text"
-                        className="flex-1 rounded border border-gray-300 px-2 py-1 text-xs text-gray-800"
+                        className="min-w-0 flex-1 basis-40 rounded border border-gray-300 px-2 py-1 text-xs text-gray-800"
                         placeholder={btn.type === 'url' ? 'https://example.com' : '+919876543210'}
                         value={btn.value}
                         onChange={(e) => updateButton(idx, 'value', e.target.value)}

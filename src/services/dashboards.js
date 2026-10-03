@@ -2,42 +2,27 @@ import { apiWrapper } from '../config';
 
 const DASHBOARDS_URL = '/api/dashboards';
 
+/**
+ * dashboardsApi
+ *
+ * Stub service preserved after custom dashboard files were removed.
+ * These endpoints previously managed custom dashboard CRUD.
+ * Kept as stubs so that api.js re-exports and any remaining
+ * consumers do not break at import time.
+ */
 export const dashboardsApi = {
-  getAll: async (params = {}) => {
-    return apiWrapper({
-      url: DASHBOARDS_URL,
-      method: 'GET',
-      params,
-    });
-  },
+  getAll: async () =>
+    apiWrapper({ url: DASHBOARDS_URL, method: 'GET' }),
 
-  getById: async (id) => {
-    return apiWrapper({
-      url: `${DASHBOARDS_URL}/${id}`,
-      method: 'GET',
-    });
-  },
+  getById: async (id) =>
+    apiWrapper({ url: `${DASHBOARDS_URL}/${id}`, method: 'GET' }),
 
-  create: async (data) => {
-    return apiWrapper({
-      url: DASHBOARDS_URL,
-      method: 'POST',
-      data,
-    });
-  },
+  create: async (data) =>
+    apiWrapper({ url: DASHBOARDS_URL, method: 'POST', data }),
 
-  update: async (id, data) => {
-    return apiWrapper({
-      url: `${DASHBOARDS_URL}/${id}`,
-      method: 'PUT',
-      data,
-    });
-  },
+  update: async (id, data) =>
+    apiWrapper({ url: `${DASHBOARDS_URL}/${id}`, method: 'PATCH', data }),
 
-  delete: async (id) => {
-    return apiWrapper({
-      url: `${DASHBOARDS_URL}/${id}`,
-      method: 'DELETE',
-    });
-  },
+  remove: async (id) =>
+    apiWrapper({ url: `${DASHBOARDS_URL}/${id}`, method: 'DELETE' }),
 };

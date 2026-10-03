@@ -165,7 +165,7 @@ export default function Roles() {
         subtitle="Create role names and control which sidebar modules are visible after login."
       />
 
-      <div className="grid grid-cols-1 gap-6 p-8 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 p-4 sm:p-6 lg:p-8 xl:grid-cols-3">
         <Card className="xl:col-span-1">
           <CardHeader>
             <CardTitle>Create Role</CardTitle>
@@ -232,7 +232,7 @@ export default function Roles() {
               {customRoles.length ? (
                 customRoles.map((role) => (
                   <div key={role.key} className="rounded-xl border border-slate-200 bg-white p-5">
-                    <div className="flex items-start justify-between gap-4">
+                    <div className="flex flex-wrap items-start justify-between gap-4">
                       <div>
                         <p className="font-semibold text-slate-900">{role.name}</p>
                       </div>

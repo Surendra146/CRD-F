@@ -30,28 +30,29 @@ export default function Modal({
       />
 
       {/* Modal Wrapper (Top Centered) */}
-      <div className="fixed inset-0 z-50 flex items-start justify-center p-6 overflow-y-auto">
+      <div className="fixed inset-0 z-50 flex items-start justify-center p-3 sm:p-6 overflow-y-auto">
         <div
           className={cn(
-            'bg-white rounded-xl shadow-xl w-full animate-slide-up mt-10',
+            'bg-white rounded-xl shadow-xl w-full min-w-0 animate-slide-up my-auto flex max-h-[calc(100dvh-1.5rem)] flex-col sm:max-h-[calc(100dvh-3rem)]',
             sizes[size],
             className
           )}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b">
-            <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+          <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 shrink-0 border-b">
+            <h2 className="min-w-0 break-words text-lg font-semibold text-gray-900">{title}</h2>
             <button
               onClick={onClose}
-              className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+              aria-label="Close dialog"
+              className="shrink-0 p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
           {/* Content (Scrollable) */}
-          <div className="px-6 py-4 max-h-[80vh] overflow-y-auto">
+          <div className="min-h-0 px-4 sm:px-6 py-4 overflow-y-auto">
             {children}
           </div>
         </div>
