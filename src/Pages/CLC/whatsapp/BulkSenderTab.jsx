@@ -23,7 +23,8 @@ import Badge from '../../../components/UI/badge.jsx';
 import { communicationsApi } from '../../../services/communications.js';
 import InteractiveButtonsBuilder from './InteractiveButtonsBuilder.jsx';
 import MediaAttachmentManager from './MediaAttachmentManager.jsx';
-import SpintaxHelper, { resolveSpintaxClient } from './SpintaxHelper.jsx';
+import SpintaxHelper from './SpintaxHelper.jsx';
+import { resolveSpintaxClient } from '../../../utils/spintax.js';
 import { formatNumber } from '../../../utils/format.js';
 
 export default function BulkSenderTab({
@@ -51,7 +52,7 @@ export default function BulkSenderTab({
 
   // Anti-ban & Throttling settings
   const [batchDelaySeconds, setBatchDelaySeconds] = useState(5);
-  const [enableSpintax, setEnableSpintax] = useState(true);
+  const [enableSpintax] = useState(true);
 
   // Scheduling options
   const [deliveryMode, setDeliveryMode] = useState('immediate'); // 'immediate' or 'scheduled'
@@ -131,12 +132,12 @@ export default function BulkSenderTab({
   };
 
   // Preview resolved message
-  const previewRecipient = audienceAudited[previewCustomerIndex] || audienceAudited[0] || {
+  const previewRecipient = useMemo(() => audienceAudited[previewCustomerIndex] || audienceAudited[0] || {
     name: 'Rahul Sharma',
     phone: '+91 98765 43210',
     demographics: { city: 'Hyderabad' },
     lifecycle: { totalSpent: 1250, segment: 'Loyal' },
-  };
+  }, [audienceAudited, previewCustomerIndex]);
 
   const resolvedPreviewMessage = useMemo(() => {
     let text = message || 'Write your message above to see a live preview...';

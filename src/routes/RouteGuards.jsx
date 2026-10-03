@@ -30,7 +30,7 @@ export function PublicRoute({ children }) {
 }
 
 export function RoleRoute({ children }) {
-  const { isAuthenticated, user } = useAuthStore();
+  const { isAuthenticated } = useAuthStore();
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;

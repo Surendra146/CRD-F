@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Legacy context API exports both the provider and its consumer hook. */
 import { createContext, useContext, useState } from 'react';
 
 /**

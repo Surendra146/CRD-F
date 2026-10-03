@@ -26,4 +26,8 @@ export default defineConfig([
       'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
     },
   },
+  {
+    files: ['vite.config.js', 'eslint.config.js', '**/*.config.cjs'],
+    languageOptions: { globals: globals.node },
+  },
 ])

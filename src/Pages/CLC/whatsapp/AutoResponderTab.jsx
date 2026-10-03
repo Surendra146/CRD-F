@@ -97,7 +97,7 @@ export default function AutoResponderTab() {
     onSuccess: (res) => {
       setSimResult(res?.data || null);
     },
-    onError: (err) => toast.error('Simulation failed'),
+    onError: () => toast.error('Simulation failed'),
   });
 
   const resetForm = () => {

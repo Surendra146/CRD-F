@@ -39,7 +39,7 @@ export default function Sidebar({ mobile = false, onNavigate }) {
         const hasVisibleChildren = Array.isArray(item.children) && item.children.length > 0;
         return canAccessModule(user, item) || hasVisibleChildren;
       });
-  }, [user?.role, JSON.stringify(user?.allowedModules || [])]);
+  }, [user]);
 
   const parentKeys = useMemo(() => {
     return navigation
@@ -58,6 +58,7 @@ export default function Sidebar({ mobile = false, onNavigate }) {
   }, [navigation, location.pathname]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Expand the parent selected by browser navigation and updated module access.
     setExpandedParentKey((prev) => {
       if (activeParentKey) return activeParentKey;
       if (prev && parentKeys.includes(prev)) return prev;

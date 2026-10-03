@@ -109,6 +109,7 @@ export default function CustomerCreate() {
     const purchaseIndex = getLatestPurchaseIndex(customerPurchases);
     const latestPurchase = purchaseIndex >= 0 ? customerPurchases[purchaseIndex] : null;
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Hydrate the editable form when the fetched customer changes.
     setPurchases(customerPurchases);
     setLatestPurchaseIndex(purchaseIndex);
 

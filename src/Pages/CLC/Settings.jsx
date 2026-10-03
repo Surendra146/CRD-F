@@ -52,6 +52,7 @@ export default function Settings() {
       return;
     }
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Hydrate editable settings from the fetched organization.
     setThresholds({
       activeCustomerDays: Number(nextThresholds.activeCustomerDays) || DEFAULT_THRESHOLDS.activeCustomerDays,
       atRiskCustomerDays: Number(nextThresholds.atRiskCustomerDays) || DEFAULT_THRESHOLDS.atRiskCustomerDays,

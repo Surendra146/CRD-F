@@ -37,6 +37,7 @@ export default function Customers({ moduleType = 'customer_details' }) {
   const [commentText, setCommentText] = useState('');
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Reset pagination when the route selects a different customer module.
     setFilters((prev) => ({ ...prev, page: 1, moduleType }));
   }, [moduleType]);
 

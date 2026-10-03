@@ -25,7 +25,7 @@ import { templatesApi } from '../../services/templates.js';
 
 import { useAuthStore } from '../../store/authstore.js';
 import { normalizeAllowedModules } from '../../utils/moduleAccess.js';
-import { formatDate, formatNumber, truncate } from '../../utils/format.js';
+import { formatDate, truncate } from '../../utils/format.js';
 
 /* =========================
    CONSTANTS
@@ -51,16 +51,6 @@ function normalizeCollection(payload) {
 /* =========================
    HELPERS
 ========================= */
-function templateVariant(channel) {
-  if (channel === 'email') return 'info';
-  if (channel === 'sms' || channel === 'whatsapp') return 'purple';
-  return 'default';
-}
-
-function inferChannel(template) {
-  return template.channel || 'whatsapp';
-}
-
 function getPreview(template) {
   if (template.subject) return template.subject;
   if (template.body) return template.body;
@@ -119,11 +109,6 @@ export default function Templates() {
 
   const templates = normalizeCollection(templatesQuery.data);
   const savedSegments = normalizeCollection(segmentsQuery.data);
-
-  const emailCount = templates.filter((t) => inferChannel(t) === 'email').length;
-  const messageCount = templates.filter((t) =>
-    ['sms', 'whatsapp'].includes(inferChannel(t))
-  ).length;
 
   /* =========================
      MUTATIONS (FIXED ERROR HANDLING)

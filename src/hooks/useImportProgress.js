@@ -78,6 +78,7 @@ export default function useImportProgress({ onFinish, addDebugEvent }) {
 
   useEffect(() => {
     if (!SOCKET_PROGRESS_ENABLED) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Expose polling mode when socket progress is disabled.
       setSocketState('polling');
       return () => {
         stopPolling();

@@ -4,7 +4,7 @@ export function normalizeRole(role) {
   return (role || '').toString().trim();
 }
 
-export function hasRoleAccess(userRole, allowedRoles = []) {
+export function hasRoleAccess() {
   return true;
 }
 

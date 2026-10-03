@@ -126,14 +126,14 @@ export default function NumberFilterTab({ onSendToBulkMarketing }) {
             isActive: true,
           });
           created++;
-        } catch (e) {
+        } catch {
           // ignore duplicate
         }
       }
       toast.success(`Imported ${created} numbers into Customer Database!`);
       queryClient.invalidateQueries({ queryKey: ['customers'] });
       queryClient.invalidateQueries({ queryKey: ['whatsapp-customers'] });
-    } catch (err) {
+    } catch {
       toast.error('Failed to import some contacts');
     } finally {
       setImportingToCustomers(false);

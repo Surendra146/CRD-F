@@ -28,7 +28,6 @@ import {
   TableRow,
 } from '../../../components/UI/table.jsx';
 import { marketingToolsApi } from '../../../services/marketingTools.js';
-import { formatNumber } from '../../../utils/format.js';
 
 export default function GroupToolsTab({ onSendToBulkMarketing }) {
   const queryClient = useQueryClient();
@@ -47,7 +46,7 @@ export default function GroupToolsTab({ onSendToBulkMarketing }) {
   // ==========================================
   const [groupLinksInput, setGroupLinksInput] = useState('');
   const [parsedLinks, setParsedLinks] = useState([]);
-  const [joiningIndex, setJoiningIndex] = useState(-1);
+  const [, setJoiningIndex] = useState(-1);
 
   // Mutations
   const grabMembersMutation = useMutation({

@@ -57,7 +57,7 @@ import NumberFilterTab from './whatsapp/NumberFilterTab.jsx';
 import GroupToolsTab from './whatsapp/GroupToolsTab.jsx';
 import InteractiveButtonsBuilder from './whatsapp/InteractiveButtonsBuilder.jsx';
 import MediaAttachmentManager from './whatsapp/MediaAttachmentManager.jsx';
-import SpintaxHelper, { resolveSpintaxClient } from './whatsapp/SpintaxHelper.jsx';
+import SpintaxHelper from './whatsapp/SpintaxHelper.jsx';
 
 function normalizeCustomers(payload) {
   const customers =
@@ -146,7 +146,8 @@ export default function WhatsApp() {
   // Sync tab with URL
   useEffect(() => {
     const tabFromUrl = searchParams.get('tab');
-    if (tabFromUrl && tabFromUrl !== activeTab) {
+    if (tabFromUrl) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Synchronize the selected tab with browser URL navigation.
       setActiveTab(tabFromUrl);
     }
   }, [searchParams]);
@@ -243,6 +244,7 @@ export default function WhatsApp() {
 
   useEffect(() => {
     if (!templateType && templates.length) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Select the initial template after asynchronous templates load.
       setTemplateType(templates[0]._id);
     }
   }, [templateType, templates]);
