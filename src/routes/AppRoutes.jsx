@@ -8,6 +8,7 @@ import { resolveDefaultRoute } from '../utils/defaultRoute';
 
 const Login = lazy(() => import('../Pages/Login'));
 const PrivacyPolicy = lazy(() => import('../Pages/PrivacyPolicy'));
+const DataDeletion = lazy(() => import('../Pages/DataDeletion'));
 const Register = lazy(() => import('../Pages/Register'));
 const Dashboard = lazy(() => import('../Pages/CLC/Dashboard'));
 const Customers = lazy(() => import('../Pages/CLC/Customers'));
@@ -47,6 +48,7 @@ function DefaultRouteRedirect() {
 export default function AppRoutes() {
   return (
     <Routes>
+      <Route path="/data-deletion" element={<PageLoader><DataDeletion /></PageLoader>} />
       <Route path="/privacy-policy" element={<PageLoader><PrivacyPolicy /></PageLoader>} />
       <Route path="/login" element={<PublicRoute><PageLoader><Login /></PageLoader></PublicRoute>} />
       <Route path="/register" element={<PublicRoute><PageLoader><Register /></PageLoader></PublicRoute>} />

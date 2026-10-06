@@ -1,4 +1,4 @@
-﻿services:
+services:
   - type: web
     name: cbd-frontend
     runtime: static
@@ -6,6 +6,12 @@
     buildCommand: npm ci && npm run build
     staticPublishPath: ./dist
     routes:
+      - type: rewrite
+        source: /data-deletion
+        destination: /data-deletion/index.html
+      - type: rewrite
+        source: /data-deletion/
+        destination: /data-deletion/index.html
       - type: rewrite
         source: /privacy-policy
         destination: /privacy-policy/index.html
