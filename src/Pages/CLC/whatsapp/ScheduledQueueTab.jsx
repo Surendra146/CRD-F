@@ -37,6 +37,7 @@ export default function ScheduledQueueTab() {
   const bulkJobsQuery = useQuery({
     queryKey: ['whatsapp-bulk-jobs'],
     queryFn: () => communicationsApi.getBulkJobs({ limit: 50 }),
+    refetchInterval: 10000,
   });
 
   const rawList = bulkJobsQuery.data?.data || bulkJobsQuery.data?.items || bulkJobsQuery.data || [];
@@ -58,6 +59,8 @@ export default function ScheduledQueueTab() {
 
   const getStatusBadge = (status) => {
     switch (status) {
+      case 'failed':
+        return <Badge variant="destructive">Failed</Badge>;
       case 'completed':
         return <Badge variant="success">Completed</Badge>;
       case 'scheduled':
@@ -284,7 +287,7 @@ export default function ScheduledQueueTab() {
                       <tr>
                         <th className="p-2">Name</th>
                         <th className="p-2">Phone</th>
-                        <th className="p-2">Status</th>
+                        <th className="p-2">Status / Error</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -293,7 +296,9 @@ export default function ScheduledQueueTab() {
                           <td className="p-2 font-medium">{r.name}</td>
                           <td className="p-2 text-gray-600">{r.phone}</td>
                           <td className="p-2">
-                            <span className="text-emerald-700 font-semibold capitalize">{r.status}</span>
+                            <span className={r.status === 'failed' || r.status === 'unknown' ? 'text-red-700 font-semibold capitalize' : 'text-gray-700 font-semibold capitalize'}>{r.status}</span>
+                            {r.message_id && <p className="break-all text-[10px] text-gray-500">{r.message_id}</p>}
+                            {r.error && <p className="mt-1 text-red-700">{typeof r.error === 'string' ? r.error : JSON.stringify(r.error)}</p>}
                           </td>
                         </tr>
                       ))}

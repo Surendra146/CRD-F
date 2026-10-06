@@ -47,6 +47,8 @@ export default function BulkSenderTab({
 
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [message, setMessage] = useState('');
+  const [metaTemplateName, setMetaTemplateName] = useState('');
+  const [metaTemplateLanguage, setMetaTemplateLanguage] = useState('en_US');
   const [buttons, setButtons] = useState([]);
   const [mediaFiles, setMediaFiles] = useState([]);
 
@@ -158,14 +160,19 @@ export default function BulkSenderTab({
   const bulkSendMutation = useMutation({
     mutationFn: (payload) => communicationsApi.sendBulkWhatsApp(payload),
     onSuccess: (res) => {
-      toast.success(res?.message || 'Bulk campaign launched successfully!');
+      if (res?.success === false || res?.data?.stats?.failed > 0) {
+        toast.error(res?.message || 'Some messages failed. Check recipient errors in the queue.');
+      } else {
+        toast.success(res?.message || 'Meta accepted the broadcast; delivery is pending confirmation.');
+      }
       queryClient.invalidateQueries({ queryKey: ['whatsapp-bulk-jobs'] });
       if (deliveryMode === 'scheduled' && onSwitchToScheduledQueue) {
         onSwitchToScheduledQueue();
       }
     },
     onError: (err) => {
-      toast.error(err?.response?.data?.detail || err?.message || 'Failed to dispatch bulk campaign');
+      const detail = err?.response?.data?.detail;
+      toast.error(typeof detail === 'string' ? detail : detail?.provider_message || detail?.message || err?.message || 'Failed to dispatch bulk campaign');
     },
   });
 
@@ -176,7 +183,7 @@ export default function BulkSenderTab({
       toast.error('Please enter a campaign title');
       return;
     }
-    if (!message.trim()) {
+    if (!message.trim() && !metaTemplateName.trim()) {
       toast.error('Please write a message template');
       return;
     }
@@ -206,6 +213,7 @@ export default function BulkSenderTab({
         numbers: audienceType === 'custom_numbers' ? audienceAudited.map((a) => a.phone) : undefined,
       },
       message: message.trim(),
+      template: metaTemplateName.trim() ? { name: metaTemplateName.trim(), language: { code: metaTemplateLanguage.trim() } } : undefined,
       buttons,
       media_files: mediaFiles,
       batch_delay_seconds: Number(batchDelaySeconds) || 5,
@@ -227,7 +235,7 @@ export default function BulkSenderTab({
             <h2 className="text-xl font-bold text-gray-900">Bulk & Unlimited WhatsApp Sender</h2>
           </div>
           <p className="mt-1 text-sm text-gray-600">
-            Send thousands of personalized messages with interactive buttons, multi-media files, anti-ban pacing, and scheduled broadcasts.
+            Send up to 20 recipients per immediate broadcast. Meta acceptance and delivery are tracked separately in the queue.
           </p>
         </div>
 
@@ -377,8 +385,20 @@ export default function BulkSenderTab({
             </CardHeader>
 
             <CardContent className="space-y-4">
+              <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+                <p>Custom text requires the recipient to have messaged your business within the last 24 hours. Otherwise use an approved Meta template. A saved CRM message is not a Meta-approved template.</p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <label>Approved Meta template name (optional)
+                    <Input value={metaTemplateName} onChange={(e) => setMetaTemplateName(e.target.value)} placeholder="hello_world" />
+                  </label>
+                  <label>Exact template language code
+                    <Input value={metaTemplateLanguage} onChange={(e) => setMetaTemplateLanguage(e.target.value)} placeholder="en_US" />
+                  </label>
+                </div>
+                <p className="mt-2 text-xs">Use a template with no dynamic parameters here. Leave the name empty to send the custom text below. Meta controls the template content.</p>
+              </div>
               <div>
-                <label className="mb-2 block text-xs font-semibold text-gray-700">Message Body *</label>
+                <label className="mb-2 block text-xs font-semibold text-gray-700">Message Body</label>
                 <textarea
                   rows={6}
                   value={message}
@@ -433,13 +453,13 @@ export default function BulkSenderTab({
                       <Send className="h-4 w-4 text-primary-600" /> Send Immediately
                     </p>
                     <p className="text-xs text-gray-500 mt-0.5">
-                      Starts processing the broadcast queue now with {batchDelaySeconds}s delay per contact.
+                      Submits to Meta now. Delivery confirmation arrives separately.
                     </p>
                   </div>
                 </label>
 
                 <label
-                  onClick={() => setDeliveryMode('scheduled')}
+                  title="Automatic scheduling is not available yet"
                   className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-all ${
                     deliveryMode === 'scheduled'
                       ? 'border-primary-600 bg-primary-50/50 shadow-xs'
@@ -450,7 +470,7 @@ export default function BulkSenderTab({
                     type="radio"
                     name="deliveryMode"
                     checked={deliveryMode === 'scheduled'}
-                    onChange={() => setDeliveryMode('scheduled')}
+                    disabled
                     className="mt-0.5"
                   />
                   <div>
@@ -458,7 +478,7 @@ export default function BulkSenderTab({
                       <Clock className="h-4 w-4 text-indigo-600" /> Schedule for Later
                     </p>
                     <p className="text-xs text-gray-500 mt-0.5">
-                      Queue this campaign to be sent automatically at a future date and time.
+                      Automatic scheduling is not available yet. Use Send Immediately.
                     </p>
                   </div>
                 </label>
