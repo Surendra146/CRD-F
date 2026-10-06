@@ -5,13 +5,13 @@ import { useEffect } from 'react';
 export default function PrivacyPolicy() {
   useEffect(() => {
     const previousTitle = document.title;
-    document.title = 'Privacy Policy | CustomerLoop';
+    document.title = 'Privacy Policy | HanuRam Tech';
     return () => { document.title = previousTitle; };
   }, []);
 
   return (
     <iframe
-      title="CustomerLoop Privacy Policy — HanuRam Tech"
+      title="HanuRam Tech Privacy Policy"
       src="/privacy-policy/index.html"
       className="fixed inset-0 h-full w-full border-0 bg-slate-50"
     />

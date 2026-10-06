@@ -1,4 +1,4 @@
-# CBD frontend and Python backend
+# HanuRam Tech frontend and Python backend
 
 The Docker stack runs this React/Vite frontend with the FastAPI backend at
 `D:\web apps\Python\CBD_Python`, PostgreSQL, and Redis. The previous Node/MongoDB

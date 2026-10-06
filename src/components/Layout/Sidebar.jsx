@@ -86,7 +86,7 @@ export default function Sidebar({ mobile = false, onNavigate }) {
   return (
     <aside className={cn("flex flex-col bg-gray-900 text-white", mobile ? "h-dvh w-full" : "fixed left-0 top-0 z-30 hidden h-dvh w-64 lg:flex")}>
       <div className="px-6 py-5 pr-12 border-b border-gray-800">
-        <h1 className="text-xl font-bold">HanuRam clc solutions</h1>
+        <h1 className="text-xl font-bold">HanuRam Tech</h1>
         <p className="text-xs text-gray-400 mt-1">Lifecycle Management</p>
       </div>
 
