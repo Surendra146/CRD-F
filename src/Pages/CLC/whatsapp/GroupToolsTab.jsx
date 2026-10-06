@@ -149,7 +149,7 @@ export default function GroupToolsTab({ onSendToBulkMarketing }) {
             <h2 className="text-xl font-bold text-gray-900">WhatsApp Group Marketing Suite</h2>
           </div>
           <p className="mt-1 text-sm text-gray-600">
-            Grab all contact numbers from active WhatsApp groups, or batch-join promotional groups with safe anti-ban pacing.
+            Parse numbers from text you provide and validate invite-link formats. This tool does not read group membership or join groups through Meta.
           </p>
         </div>
 

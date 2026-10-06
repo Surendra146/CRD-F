@@ -34,7 +34,11 @@ export default function MediaAttachmentManager({ mediaFiles = [], onChange }) {
   };
 
   const handleAddUrl = () => {
-    if (!urlInput.trim()) {
+    if (mediaFiles.length) {
+      toast.error('Send one media URL per message');
+      return;
+    }
+    if (!urlInput.trim().startsWith('https://')) {
       toast.error('Please enter a valid media URL');
       return;
     }
@@ -62,7 +66,7 @@ export default function MediaAttachmentManager({ mediaFiles = [], onChange }) {
         <div>
           <p className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
             <Paperclip className="h-4 w-4 text-primary-600" />
-            <span>Multiple Media & File Attachments</span>
+            <span>Public Media URL</span>
             {mediaFiles.length > 0 && (
               <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-800">
                 {mediaFiles.length} File{mediaFiles.length > 1 ? 's' : ''} Attached
@@ -70,7 +74,7 @@ export default function MediaAttachmentManager({ mediaFiles = [], onChange }) {
             )}
           </p>
           <p className="text-xs text-gray-500">
-            Attach multiple product images, PDF brochures, catalogs, or documents at once
+            Send one public HTTPS image, video or document URL per message. Local uploads are not supported
           </p>
         </div>
 
@@ -87,7 +91,7 @@ export default function MediaAttachmentManager({ mediaFiles = [], onChange }) {
             type="button"
             size="sm"
             variant="outline"
-            onClick={() => fileInputRef.current?.click()}
+            disabled title="Use Add Media URL; local upload is not supported"
           >
             <Paperclip className="mr-1.5 h-3.5 w-3.5" />
             Upload Files

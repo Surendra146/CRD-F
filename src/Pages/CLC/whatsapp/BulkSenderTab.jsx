@@ -52,7 +52,7 @@ export default function BulkSenderTab({
   const [buttons, setButtons] = useState([]);
   const [mediaFiles, setMediaFiles] = useState([]);
 
-  // Anti-ban & Throttling settings
+  // Sending & Throttling settings
   const [batchDelaySeconds, setBatchDelaySeconds] = useState(5);
   const [enableSpintax] = useState(true);
 
@@ -232,7 +232,7 @@ export default function BulkSenderTab({
             <span className="rounded-lg bg-primary-600 p-2 text-white shadow-sm">
               <Layers className="h-5 w-5" />
             </span>
-            <h2 className="text-xl font-bold text-gray-900">Bulk & Unlimited WhatsApp Sender</h2>
+            <h2 className="text-xl font-bold text-gray-900">WhatsApp Broadcast Sender</h2>
           </div>
           <p className="mt-1 text-sm text-gray-600">
             Send up to 20 recipients per immediate broadcast. Meta acceptance and delivery are tracked separately in the queue.
@@ -245,7 +245,7 @@ export default function BulkSenderTab({
             <p className="text-lg font-bold text-gray-900">{formatNumber(targetRecipientCount)} Contacts</p>
           </div>
           <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 px-4 py-2.5 shadow-xs">
-            <p className="text-xs text-emerald-700 font-medium">Safe Sending Rate</p>
+            <p className="text-xs text-emerald-700 font-medium">Dispatch interval</p>
             <p className="text-lg font-bold text-emerald-800">{batchDelaySeconds}s delay/msg</p>
           </div>
         </div>
@@ -341,9 +341,9 @@ export default function BulkSenderTab({
                   <div className="flex items-center gap-2">
                     <ShieldCheck className="h-5 w-5 text-amber-700" />
                     <div>
-                      <p className="text-xs font-bold text-amber-900">Anti-Ban Protection & Throttling</p>
+                      <p className="text-xs font-bold text-amber-900">Dispatch interval</p>
                       <p className="text-[11px] text-amber-800">
-                        Adds a safety delay between dispatches to comply with WhatsApp rate limits and prevent account restrictions.
+                        Waits between requests. Meta messaging rules and account limits still apply.
                       </p>
                     </div>
                   </div>
@@ -356,8 +356,6 @@ export default function BulkSenderTab({
                     >
                       <option value={3}>3 seconds (Fast)</option>
                       <option value={5}>5 seconds (Recommended)</option>
-                      <option value={8}>8 seconds (Extra Safe)</option>
-                      <option value={12}>12 seconds (Conservative)</option>
                     </select>
                   </div>
                 </div>

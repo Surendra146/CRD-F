@@ -61,10 +61,10 @@ export default function GMapsExtractorTab({ onSendToBulkMarketing }) {
       const results = res?.data || [];
       setLeads(results);
       setSelectedLeadIds(new Set(results.map((l) => l.id)));
-      toast.success(`Found ${results.length} business leads from Google Maps!`);
+      toast.success(`Found ${results.length} business leads from OpenStreetMap!`);
     },
     onError: (err) => {
-      toast.error(err?.response?.data?.detail || err?.message || 'Failed to extract Google Maps leads');
+      toast.error(err?.response?.data?.detail || err?.message || 'Failed to extract OpenStreetMap leads');
     },
   });
 

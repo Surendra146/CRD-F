@@ -53,11 +53,12 @@ export const getStoredAuthToken = () => {
 /* =========================
    ERROR FORMATTER
 ========================= */
-export const formatApiError = (error) =>
-  error?.response?.data?.message ||
-  error?.response?.data?.error ||
-  error?.message ||
-  'Something went wrong';
+export const formatApiError = (error) => {
+  const detail = error?.response?.data?.detail;
+  return (typeof detail === 'string' ? detail : detail?.provider_message || detail?.message) ||
+    error?.response?.data?.message || error?.response?.data?.error ||
+    error?.message || 'Something went wrong';
+};
 
 /* =========================
    AXIOS INSTANCE

@@ -405,7 +405,7 @@ export default function WhatsApp() {
   }
 
   const tabsConfig = [
-    { id: 'bulk', label: 'Bulk & Unlimited Sender', icon: Layers, badge: 'Popular' },
+    { id: 'bulk', label: 'WhatsApp Broadcast', icon: Layers, badge: 'Popular' },
     { id: 'scheduled', label: 'Scheduled Queue', icon: Clock },
     { id: 'gmaps', label: 'Google Maps Extractor', icon: MapPin, badge: 'Hot' },
     { id: 'auto_responder', label: 'Auto Responder Bot', icon: Bot },

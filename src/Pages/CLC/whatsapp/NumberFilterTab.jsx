@@ -43,7 +43,7 @@ export default function NumberFilterTab({ onSendToBulkMarketing }) {
     onSuccess: (res) => {
       setFilterResult(res?.data || null);
       toast.success(
-        `Filtering complete: ${res?.data?.summary?.valid_count || 0} valid WhatsApp numbers detected!`
+        `Filtering complete: ${res?.data?.summary?.valid_count || 0} numbers with valid formatting. WhatsApp availability was not checked.`
       );
     },
     onError: (err) => {

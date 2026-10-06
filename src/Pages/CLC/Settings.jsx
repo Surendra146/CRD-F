@@ -164,6 +164,7 @@ export default function Settings() {
                 {user?.organization?.name || user?.companyName || 'Not configured'}
               </p>
               <p className="mt-1 text-xs text-gray-500">Tenant Code: {tenantCode}</p>
+              <p className="mt-1 text-xs text-gray-500">Organization ID: {user?.organization_id || user?.organizationId || user?.organization?.id || 'Not available'}</p>
             </div>
 
             <div className="rounded-xl border border-gray-200 bg-white p-4">

@@ -166,10 +166,10 @@ export default function AutoResponderTab() {
             <span className="rounded-lg bg-purple-600 p-2 text-white shadow-sm">
               <Bot className="h-5 w-5" />
             </span>
-            <h2 className="text-xl font-bold text-gray-900">WhatsApp 24/7 Auto Responder Bot</h2>
+            <h2 className="text-xl font-bold text-gray-900">Auto-Reply Rule Tester</h2>
           </div>
           <p className="mt-1 text-sm text-gray-600">
-            Set up automatic keyword-based replies, product catalogs, FAQ bots, and default fallback responses for all incoming customer messages.
+            Save and test keyword-based response rules. Automatic replies to incoming WhatsApp messages are not connected.
           </p>
         </div>
 
