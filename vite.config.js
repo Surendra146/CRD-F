@@ -2,7 +2,15 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), {
+    name: 'public-privacy-policy',
+    configureServer(server) {
+      server.middlewares.use(servePrivacyPolicy);
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(servePrivacyPolicy);
+    },
+  }],
   server: {
     host: '0.0.0.0',
     port: 5173,
@@ -30,3 +38,11 @@ export default defineConfig({
     include: ['tslib']
   }
 })
+
+function servePrivacyPolicy(req, _res, next) {
+  const pathname = req.url?.split('?')[0];
+  if (pathname === '/privacy-policy' || pathname === '/privacy-policy/') {
+    req.url = '/privacy-policy/index.html';
+  }
+  next();
+}
