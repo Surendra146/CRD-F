@@ -174,7 +174,7 @@ export default function GroupToolsTab({ onSendToBulkMarketing }) {
                 : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
             }`}
           >
-            2. Auto Group Joiner
+            2. Invite Link Organizer
           </button>
         </div>
       </div>
@@ -343,7 +343,7 @@ export default function GroupToolsTab({ onSendToBulkMarketing }) {
               <Card>
                 <CardHeader>
                   <CardTitle className="text-sm">
-                    Group Join Queue ({parsedLinks.filter((l) => l.is_valid).length} Valid)
+                    Validated Invite Links ({parsedLinks.filter((l) => l.is_valid).length} Valid)
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -372,7 +372,7 @@ export default function GroupToolsTab({ onSendToBulkMarketing }) {
                                 item.status === 'opened' ? (
                                   <Badge variant="success">Opened</Badge>
                                 ) : (
-                                  <Badge variant="info">Ready to Join</Badge>
+                                  <Badge variant="info">Valid link format</Badge>
                                 )
                               ) : (
                                 <Badge variant="destructive">Invalid Link</Badge>
@@ -403,7 +403,7 @@ export default function GroupToolsTab({ onSendToBulkMarketing }) {
                   <Link className="h-10 w-10 mx-auto text-gray-300" />
                   <p className="font-medium text-gray-800">No group links in queue</p>
                   <p className="text-xs text-gray-400 max-w-sm mx-auto">
-                    Paste WhatsApp group invite links on the left to organize and join them without getting flagged for fast spamming.
+                    Paste invite links to validate their format. Opening a link lets you review and join manually in WhatsApp.
                   </p>
                 </CardContent>
               </Card>
