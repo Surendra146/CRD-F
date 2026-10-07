@@ -30,6 +30,12 @@ import {
 import { communicationsApi } from '../../../services/communications.js';
 import { formatDate, formatNumber } from '../../../utils/format.js';
 
+// The backend stores these timestamps as UTC without an offset.
+function formatSchedule(value) {
+  const utcValue = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value) ? value : `${value}Z`;
+  return new Date(utcValue).toLocaleString();
+}
+
 export default function ScheduledQueueTab() {
   const queryClient = useQueryClient();
   const [selectedJob, setSelectedJob] = useState(null);
@@ -168,7 +174,7 @@ export default function ScheduledQueueTab() {
                       {job.scheduled_at || job.scheduledAt ? (
                         <div className="flex items-center gap-1 text-indigo-700 font-medium">
                           <Clock className="h-3.5 w-3.5" />
-                          <span>{formatDate(job.scheduled_at || job.scheduledAt)}</span>
+                          <span>{formatSchedule(job.scheduled_at || job.scheduledAt)}</span>
                         </div>
                       ) : (
                         formatDate(job.created_at || job.createdAt)
@@ -251,7 +257,7 @@ export default function ScheduledQueueTab() {
               <div>
                 <span className="text-gray-500">Scheduled Delivery:</span>
                 <p className="mt-0.5 font-bold text-gray-900">
-                  {selectedJob.scheduled_at ? formatDate(selectedJob.scheduled_at) : 'Immediate'}
+                  {selectedJob.scheduled_at ? formatSchedule(selectedJob.scheduled_at) : 'Immediate'}
                 </p>
               </div>
             </div>

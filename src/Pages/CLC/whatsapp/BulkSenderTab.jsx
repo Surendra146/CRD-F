@@ -29,9 +29,9 @@ import { formatNumber } from '../../../utils/format.js';
 
 export default function BulkSenderTab({
   customers = [],
-  savedSegments = [],
   templates = [],
   preloadedNumbers = [],
+  audienceLoadError = false,
   onSwitchToScheduledQueue,
 }) {
   const queryClient = useQueryClient();
@@ -96,13 +96,13 @@ export default function BulkSenderTab({
   const segmentOptions = useMemo(() => {
     const list = [
       { value: '', label: 'All Segments (Broadcast to all)' },
-      ...savedSegments.map((s) => ({
-        value: s.name || s._id,
-        label: `${s.name} (${s.description || 'Segment'})`,
+      ...[...new Set(customers.map((c) => c.lifecycle?.segment || c.segment).filter(Boolean))].map((segment) => ({
+        value: segment,
+        label: String(segment).replace(/_/g, ' '),
       })),
     ];
     return list;
-  }, [savedSegments]);
+  }, [customers]);
 
   const templateOptions = useMemo(() => {
     return [
@@ -191,6 +191,10 @@ export default function BulkSenderTab({
       toast.error('Target audience has 0 reachable recipients. Choose another segment or input numbers.');
       return;
     }
+    if (targetRecipientCount > 20) {
+      toast.error('Select up to 20 recipients per broadcast, or paste a smaller list in Custom Numbers.');
+      return;
+    }
 
     let scheduledAt = null;
     if (deliveryMode === 'scheduled') {
@@ -198,11 +202,12 @@ export default function BulkSenderTab({
         toast.error('Please pick both date and time for scheduled send');
         return;
       }
-      scheduledAt = new Date(`${scheduledDate}T${scheduledTime}`).toISOString();
-      if (new Date(scheduledAt) <= new Date()) {
+      const scheduled = new Date(`${scheduledDate}T${scheduledTime}`);
+      if (!Number.isFinite(scheduled.getTime()) || scheduled <= new Date()) {
         toast.error('Scheduled date & time must be in the future');
         return;
       }
+      scheduledAt = scheduled.toISOString();
     }
 
     const payload = {
@@ -216,7 +221,7 @@ export default function BulkSenderTab({
       template: metaTemplateName.trim() ? { name: metaTemplateName.trim(), language: { code: metaTemplateLanguage.trim() } } : undefined,
       buttons,
       media_files: mediaFiles,
-      batch_delay_seconds: Number(batchDelaySeconds) || 5,
+      batch_delay_seconds: Number(batchDelaySeconds),
       scheduled_at: scheduledAt,
     };
 
@@ -457,7 +462,6 @@ export default function BulkSenderTab({
                 </label>
 
                 <label
-                  title="Automatic scheduling is not available yet"
                   className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-all ${
                     deliveryMode === 'scheduled'
                       ? 'border-primary-600 bg-primary-50/50 shadow-xs'
@@ -468,7 +472,7 @@ export default function BulkSenderTab({
                     type="radio"
                     name="deliveryMode"
                     checked={deliveryMode === 'scheduled'}
-                    disabled
+                    onChange={() => setDeliveryMode('scheduled')}
                     className="mt-0.5"
                   />
                   <div>
@@ -476,7 +480,7 @@ export default function BulkSenderTab({
                       <Clock className="h-4 w-4 text-indigo-600" /> Schedule for Later
                     </p>
                     <p className="text-xs text-gray-500 mt-0.5">
-                      Automatic scheduling is not available yet. Use Send Immediately.
+                      Automatically submits to Meta at your chosen date and time.
                     </p>
                   </div>
                 </label>
@@ -488,7 +492,7 @@ export default function BulkSenderTab({
                     <label className="mb-1 block text-xs font-semibold text-gray-700">Scheduled Date *</label>
                     <input
                       type="date"
-                      min={new Date().toISOString().split('T')[0]}
+                      min={new Date().toLocaleDateString('en-CA')}
                       value={scheduledDate}
                       onChange={(e) => setScheduledDate(e.target.value)}
                       className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
@@ -506,12 +510,20 @@ export default function BulkSenderTab({
                 </div>
               )}
 
+              {deliveryMode === 'scheduled' && (
+                <p className="text-xs text-gray-500">Time zone: {Intl.DateTimeFormat().resolvedOptions().timeZone}. The backend must be running to dispatch scheduled messages.</p>
+              )}
+              {audienceLoadError && audienceType !== 'custom_numbers' && (
+                <p role="alert" className="text-sm text-red-600">Customers could not be loaded. Refresh Data or use Custom Numbers.</p>
+              )}
+              {targetRecipientCount === 0 && (
+                <p role="status" className="text-sm text-amber-700">No recipients selected. Choose customers above or paste phone numbers under Custom Numbers.</p>
+              )}
               <div className="flex justify-end pt-2">
                 <Button
                   type="submit"
                   size="lg"
                   isLoading={bulkSendMutation.isPending}
-                  disabled={targetRecipientCount === 0}
                 >
                   {deliveryMode === 'scheduled' ? (
                     <>
@@ -519,7 +531,7 @@ export default function BulkSenderTab({
                     </>
                   ) : (
                     <>
-                      <Send className="mr-2 h-5 w-5" /> Launch Bulk Broadcast ({formatNumber(targetRecipientCount)})
+                      <Send className="mr-2 h-5 w-5" /> Send Immediately — Launch Bulk Broadcast ({formatNumber(targetRecipientCount)})
                     </>
                   )}
                 </Button>

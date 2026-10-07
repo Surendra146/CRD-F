@@ -57,15 +57,9 @@ import MediaAttachmentManager from './whatsapp/MediaAttachmentManager.jsx';
 import SpintaxHelper from './whatsapp/SpintaxHelper.jsx';
 
 function normalizeCustomers(payload) {
-  const customers =
-    payload?.data ||
-    payload?.items ||
-    payload?.customers ||
-    payload?.data?.data ||
-    payload?.data?.items ||
-    [];
-
-  return Array.isArray(customers) ? customers : [];
+  return [payload, payload?.data, payload?.items, payload?.customers,
+    payload?.data?.data, payload?.data?.items, payload?.data?.customers]
+    .find(Array.isArray) || [];
 }
 
 function cleanPhoneNumber(value) {
@@ -462,6 +456,7 @@ export default function WhatsApp() {
             savedSegments={savedSegments}
             templates={templates}
             preloadedNumbers={preloadedNumbers}
+            audienceLoadError={isError}
             onSwitchToScheduledQueue={() => handleTabChange('scheduled')}
           />
         )}
