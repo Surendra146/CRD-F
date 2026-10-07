@@ -1,4 +1,4 @@
-import { ArrowUpRight, BarChart3, Building2, Check, Layers3, MessageSquare, Users } from 'lucide-react';
+import { ArrowUpRight, BarChart3, Building2, Check, MessageSquare, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import './auth.css';
 
@@ -6,7 +6,7 @@ export default function AuthLayout({ children, signup = false }) {
   return (
     <main className="auth-page">
       <aside className="auth-story">
-        <Link to="/login" className="auth-brand"><span className="auth-brand-mark"><Layers3 size={23} /></span><span>HanuRam<span className="auth-brand-tech">TECH</span></span></Link>
+        <Link to="/login" className="auth-brand" aria-label="HanuRam Tech home"><img src="/brand/hanuram-tech.png" alt="HanuRam Tech" className="auth-brand-image" /></Link>
         <div className="auth-story-content">
           <span className="auth-eyebrow">YOUR CUSTOMER GROWTH WORKSPACE</span>
           <h1>Better connections.<br /><span>Stronger business.</span></h1>

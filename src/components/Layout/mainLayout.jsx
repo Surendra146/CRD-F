@@ -20,7 +20,7 @@ export default function MainLayout() {
           <Dialog.Trigger asChild>
             <button type="button" aria-label="Open navigation" className="rounded-lg p-3 text-gray-700 hover:bg-gray-100"><Menu className="h-5 w-5" /></button>
           </Dialog.Trigger>
-          <span className="text-sm font-semibold">HanuRam Tech</span>
+          <a href="/" aria-label="HanuRam Tech home"><img src="/brand/hanuram-tech.png" alt="HanuRam Tech" className="h-12 w-18 rounded-md object-contain bg-gray-950" /></a>
         </div>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-40 bg-black/50 lg:hidden" />
