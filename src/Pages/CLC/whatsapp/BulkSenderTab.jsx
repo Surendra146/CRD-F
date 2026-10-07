@@ -531,7 +531,7 @@ export default function BulkSenderTab({
                     </>
                   ) : (
                     <>
-                      <Send className="mr-2 h-5 w-5" /> Send Immediately — Launch Bulk Broadcast ({formatNumber(targetRecipientCount)})
+                      <Send className="mr-2 h-5 w-5" /> Launch Bulk Broadcast ({formatNumber(targetRecipientCount)})
                     </>
                   )}
                 </Button>

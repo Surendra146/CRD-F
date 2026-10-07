@@ -3,7 +3,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
 import Button from '../components/UI/button';
-import Input from '../components/UI/input';
+import Input from '../components/Auth/AuthField';
+import AuthLayout from '../components/Auth/AuthLayout';
+import { ArrowRight, LockKeyhole, ShieldCheck } from 'lucide-react';
 import { useAuthStore } from '../store/authstore';
 import { authFormSchemas } from '../config/formSchemas';
 import { validateBySchema } from '../utils/formValidation';
@@ -12,6 +14,7 @@ import { resolveDefaultRoute } from '../utils/defaultRoute';
 export default function Login() {
   const navigate = useNavigate();
   const { login, isLoading } = useAuthStore();
+  const [error, setError] = useState('');
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -19,11 +22,12 @@ export default function Login() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
     if (isLoading) return;
 
     const validationError = validateBySchema(formData, authFormSchemas.login);
     if (validationError) {
-      toast.error(validationError);
+      setError(validationError);
       return;
     }
 
@@ -33,22 +37,20 @@ export default function Login() {
       toast.success('Welcome back!');
       navigate(resolveDefaultRoute(useAuthStore.getState().user));
     } else {
-      toast.error(result.message);
+      setError(result.message || 'Please try again.');
     }
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-md">
-        <div className="mb-8 text-center">
-          <h1 className="text-3xl font-bold text-gray-900">HanuRam Tech</h1>
-          <p className="mt-2 text-gray-500">Sign in to your account</p>
-        </div>
-
-        <div className="rounded-xl border bg-white p-4 sm:p-6 lg:p-8 shadow-sm">
-          <form onSubmit={handleSubmit} className="space-y-6">
+    <AuthLayout>
+      <div className="auth-form-icon"><LockKeyhole size={22} /></div>
+      <p className="auth-kicker">WELCOME TO YOUR WORKSPACE</p>
+      <h2>Welcome back.</h2>
+      <p className="auth-description">Sign in to stay connected with your customers and keep your business moving.</p>
+          <form onSubmit={handleSubmit} className="auth-form" aria-busy={isLoading}>
+            {error && <div className="auth-error" role="alert">{error}</div>}
             <Input
-              label="Email"
+              label="Email address"
               type="email"
               placeholder="you@company.com"
               value={formData.email}
@@ -67,22 +69,12 @@ export default function Login() {
               autoComplete="current-password"
             />
 
-            <Button type="submit" className="w-full bg-amber-500" isLoading={isLoading}>
-              Sign In
+            <Button type="submit" className="auth-submit" isLoading={isLoading}>
+              {isLoading ? 'Signing in...' : 'Sign in'} {!isLoading && <ArrowRight size={16} />}
             </Button>
           </form>
-
-          <p className="mt-6 text-center text-sm text-gray-500">
-            Don't have an account?{' '}
-            <Link to="/register" className="font-medium text-primary-600 hover:text-primary-700">
-              Sign up
-            </Link>
-          </p>
-        </div>
-        <p className="mt-6 text-center text-sm text-gray-500">
-          <a href="/privacy-policy" className="underline underline-offset-4 hover:text-gray-900">Privacy Policy</a>
-        </p>
-      </div>
-    </div>
+      <p className="auth-bottom-link">Don't have an account? <Link to="/register">Create an account</Link></p>
+      <p className="auth-security"><ShieldCheck size={14} /> Your customer workspace starts here</p>
+    </AuthLayout>
   );
 }
