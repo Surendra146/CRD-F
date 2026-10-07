@@ -39,3 +39,6 @@ jobs:
 
       - name: Build check
         run: npm run test:ci
+
+      - name: Production Docker build
+        run: docker build --target production -t cbd-frontend:ci .

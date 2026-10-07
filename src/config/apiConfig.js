@@ -25,15 +25,6 @@ export const whatsappSendPath =
   import.meta.env.VITE_WHATSAPP_SEND_PATH ||
   '/api/communications/whatsapp/send';
 
-export const whatsappProvider =
-  import.meta.env.VITE_WHATSAPP_PROVIDER || 'meta_cloud';
-
-export const whatsappGraphVersion =
-  import.meta.env.VITE_WHATSAPP_GRAPH_VERSION || 'v23.0';
-
-export const whatsappPhoneNumberId =
-  import.meta.env.VITE_WHATSAPP_PHONE_NUMBER_ID || '';
-
 /* =========================
    AUTH TOKEN
 ========================= */

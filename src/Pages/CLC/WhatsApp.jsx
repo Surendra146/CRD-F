@@ -41,9 +41,6 @@ import { segmentsApi } from '../../services/segments.js';
 import { templatesApi } from '../../services/templates.js';
 import {
   formatApiError,
-  whatsappGraphVersion,
-  whatsappPhoneNumberId,
-  whatsappProvider,
   whatsappSendPath,
 } from '../../services/api';
 import { formatCurrency, formatNumber, formatRelativeTime } from '../../utils/format.js';
@@ -274,9 +271,6 @@ export default function WhatsApp() {
         customerId: customer._id,
         name: customer.name,
         phone: cleanPhoneNumber(customer.phone),
-        provider: whatsappProvider,
-        graphVersion: whatsappGraphVersion,
-        phoneNumberId: whatsappPhoneNumberId || undefined,
         templateType: selectedTemplate?.category || 'custom',
         templateParameters: buildTemplateParameters(selectedTemplate?.category, customer),
         preferredLanguage: customer.preferences?.language || 'en',
@@ -526,7 +520,7 @@ export default function WhatsApp() {
                   <div>
                     <p className="text-sm text-gray-500">Delivery Mode</p>
                     <p className="mt-2 text-2xl font-semibold text-gray-900">
-                      {whatsappProvider === 'meta_cloud' ? 'Meta Cloud' : 'Manual Link'}
+                      Backend API
                     </p>
                   </div>
                   <MessageCircle className="h-6 w-6 text-gray-700" />
@@ -691,14 +685,6 @@ export default function WhatsApp() {
                     </div>
                   </div>
 
-                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                    <p className="text-sm font-medium text-gray-900">Meta Cloud target</p>
-                    <p className="mt-2 text-sm text-gray-500">Provider: {whatsappProvider}</p>
-                    <p className="mt-1 text-sm text-gray-500">Graph version: {whatsappGraphVersion}</p>
-                    <p className="mt-1 break-all text-sm text-gray-500">
-                      Phone number ID: {whatsappPhoneNumberId || 'Not configured'}
-                    </p>
-                  </div>
 
                   {lastDelivery ? (
                     <div className="rounded-xl border border-green-200 bg-green-50 p-4">

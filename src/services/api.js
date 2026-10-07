@@ -8,9 +8,6 @@ export {
   getStoredAuthToken,
   whatsappApiMode,
   whatsappSendPath,
-  whatsappProvider,
-  whatsappGraphVersion,
-  whatsappPhoneNumberId,
 } from '../config/apiConfig';
 
 export { default } from '../config/apiConfig';
