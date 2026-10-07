@@ -16,6 +16,7 @@ import Header from '../../components/Layout/Header.jsx';
 import Button from '../../components/UI/button.jsx';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/UI/card.jsx';
 import { authApi } from '../../services/auth.js';
+import WhatsAppConnectionCard from '../../components/whatsapp/WhatsAppConnectionCard.jsx';
 import { useAuthStore } from '../../store/authstore.js';
 import { normalizeAllowedModules } from '../../utils/moduleAccess.js';
 
@@ -138,6 +139,7 @@ export default function Settings() {
       <Header title="Settings" subtitle="Account, access control, and customer lifecycle rules" />
 
       <div className="grid grid-cols-1 gap-6 p-4 sm:p-6 lg:p-8 xl:grid-cols-3">
+        <WhatsAppConnectionCard />
         <Card className="xl:col-span-1">
           <CardHeader>
             <CardTitle>Account</CardTitle>
