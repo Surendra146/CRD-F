@@ -157,6 +157,13 @@ export default function CustomersTable({
 
                 <TableCell>
                   <div className="relative flex items-center justify-end gap-2">
+                    {!isSalesModule && (
+                      <Link to={`/customers/${customer._id}/edit?moduleType=${moduleType}`}>
+                        <Button variant="ghost" size="sm" aria-label={`Edit ${customer.name}`} title="Edit customer">
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                      </Link>
+                    )}
                     <Link to={`/customers/${customer._id}?moduleType=${moduleType}`}>
                       <Button variant="ghost" size="sm">
                         <Eye className="h-4 w-4" />

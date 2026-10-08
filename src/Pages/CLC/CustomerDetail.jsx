@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   Calendar,
   DollarSign,
+  Edit,
   Mail,
   MapPin,
   MessageSquare,
@@ -152,12 +153,22 @@ export default function CustomerDetail() {
         title={customer.name || 'Customer Detail'}
         subtitle={`Customer ID: ${id}`}
         actions={
+          <div className="flex items-center gap-2">
+            {!isSalesModule && (
+              <Link to={`/customers/${id}/edit?moduleType=customer_details`}>
+                <Button>
+                  <Edit className="mr-2 h-4 w-4" />
+                  Edit Customer
+                </Button>
+              </Link>
+            )}
           <Link to={backPath}>
             <Button variant="outline">
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back
             </Button>
           </Link>
+          </div>
         }
       />
 

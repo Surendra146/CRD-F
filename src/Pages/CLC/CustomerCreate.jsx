@@ -166,6 +166,11 @@ export default function CustomerCreate() {
   };
 
   const validateForm = () => {
+    if (!/^[0-9]{10}$/.test(form.phone.trim())) {
+      toast.error('Phone Number must contain exactly 10 digits');
+      return false;
+    }
+
     if (isSalesModule) {
       const requiredFields = [
         { key: 'name', label: 'Customer Name' },
@@ -363,6 +368,15 @@ export default function CustomerCreate() {
 
                   <Input
                     label="Phone Number *"
+                    type="tel"
+                    inputMode="numeric"
+                    autoComplete="tel-national"
+                    pattern="[0-9]{10}"
+                    minLength={10}
+                    maxLength={10}
+                    required
+                    title="Phone Number must contain exactly 10 digits"
+                    placeholder="Enter 10-digit phone number"
                     value={form.phone}
                     onChange={(e) => handleChange('phone', e.target.value)}
                   />
