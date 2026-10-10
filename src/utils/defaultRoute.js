@@ -1,4 +1,5 @@
-import { normalizeAllowedModules } from './moduleAccess';
+import { normalizeAllowedModules } from './moduleAccess.js';
+import { normalizeRole } from './rbac.js';
 
 const moduleRouteByKey = {
   dashboard: '/dashboard',
@@ -18,6 +19,7 @@ const moduleRouteByKey = {
   roles: '/roles',
   users: '/users',
   settings: '/settings',
+  reports: '/reports/recent-upload',
   'custom-dashboards': '/dashboard',
 };
 
@@ -33,16 +35,19 @@ const defaultRoutePriority = [
   'roles',
   'users',
   'settings',
+  'reports',
   'custom-dashboards',
 ];
 
 export function resolveDefaultRoute(user) {
+  if (!user) return '/login';
+  if (['owner', 'admin'].includes(normalizeRole(user.role))) return '/dashboard';
   const allowedModules = normalizeAllowedModules(user?.allowedModules);
 
   if (!allowedModules.length) {
-    return '/dashboard';
+    return '/access-required';
   }
 
   const firstMatch = defaultRoutePriority.find((moduleKey) => allowedModules.includes(moduleKey) && moduleRouteByKey[moduleKey]);
-  return firstMatch ? moduleRouteByKey[firstMatch] : '/dashboard';
+  return firstMatch ? moduleRouteByKey[firstMatch] : '/access-required';
 }

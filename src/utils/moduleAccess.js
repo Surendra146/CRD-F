@@ -1,4 +1,6 @@
 const MODULE_KEY_ALIASES = {
+  dashboards: 'dashboard',
+  'custom-dashboards': 'dashboard',
   'customer-details': 'customers',
   'customer-sales': 'customers',
   'customer-segment-import': 'campaigns',

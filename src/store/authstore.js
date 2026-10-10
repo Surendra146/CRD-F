@@ -10,7 +10,7 @@ const normalizeAuthUser = (user) =>
     ? {
         ...user,
         role: normalizeRole(user.role),
-        allowedModules: Array.isArray(user.allowedModules) ? user.allowedModules : [],
+        allowedModules: Array.isArray(user.allowedModules) ? user.allowedModules : (user.allowed_modules || []),
       }
     : null;
 

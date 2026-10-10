@@ -241,7 +241,7 @@ export default function Roles() {
                           <LayoutPanelLeft className="h-4 w-4" />
                           {role.modules.length} modules
                         </div>
-                        <Button
+                        {!role.builtin && <Button
                           type="button"
                           variant="ghost"
                           size="sm"
@@ -249,7 +249,7 @@ export default function Roles() {
                         >
                           <Pencil className="h-4 w-4" />
                           Edit
-                        </Button>
+                        </Button>}
                       </div>
                     </div>
 

@@ -11,6 +11,9 @@ import {
 } from 'lucide-react';
 
 export const sidebarModules = [
+  { key: 'business', accessKey: 'business', label: 'Business & WhatsApp', href: '/business', icon: Settings, roles: ['owner'], enabled: true },
+  { key: 'billing', accessKey: 'billing', label: 'Subscription & Billing', href: '/billing', icon: PanelsTopLeft, roles: ['owner'], enabled: true },
+  { key: 'platform', accessKey: 'platform', label: 'Platform Console', href: '/platform', icon: ShieldCheck, enabled: true },
   {
     key: 'dashboard',
     accessKey: 'dashboard',

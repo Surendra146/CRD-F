@@ -1,29 +1,22 @@
-import { moduleAccessKey, normalizeAllowedModules } from './moduleAccess';
+import { moduleAccessKey, normalizeAllowedModules } from './moduleAccess.js';
 
 export function normalizeRole(role) {
-  return (role || '').toString().trim();
+  return (role || '').toString().trim().toLowerCase().replace(/[ -]+/g, '_');
 }
 
-export function hasRoleAccess() {
-  return true;
+export function hasRoleAccess(user, roles = []) {
+  if (!user) return false;
+  return roles.length === 0 || roles.map(normalizeRole).includes(normalizeRole(user.role));
 }
 
 export function canAccessModule(user, module) {
-  const normalizedRole = (user?.role || '').toString().trim().toLowerCase();
-  if (normalizedRole === 'owner' || normalizedRole === 'admin') {
-    return true;
-  }
-
+  if (!user) return false;
+  const normalizedRole = normalizeRole(user.role);
   const assignedModules = normalizeAllowedModules(user?.allowedModules);
   const accessKey = moduleAccessKey(module);
-
-  if (assignedModules.length) {
-    return assignedModules.includes(accessKey);
-  }
-
-  if (!module?.roles?.length) {
-    return true;
-  }
-
-  return true;
+  if (accessKey === 'platform') return Boolean(user.platformPermissions?.length);
+  if (!hasRoleAccess(user, module?.roles || [])) return false;
+  // Ownership/administration is tenant scoped. Platform staff has no implicit tenant access.
+  if (normalizedRole === 'owner' || normalizedRole === 'admin') return Boolean(accessKey);
+  return Boolean(accessKey) && hasRoleAccess(user, module?.roles || []) && assignedModules.includes(accessKey);
 }

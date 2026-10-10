@@ -182,7 +182,9 @@ export default function Users() {
                 label="Temporary password"
                 value={form.password}
                 onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
-                placeholder="Optional"
+                type="password"
+                required
+                placeholder="Required initial password"
               />
               <Select
                 label="Role profile"

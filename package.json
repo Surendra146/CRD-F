@@ -8,7 +8,7 @@
     "build": "vite build --configLoader native",
     "lint": "eslint .",
     "preview": "vite preview --configLoader native",
-    "test": "npm run build",
+    "test": "node --test tests/*.test.js && npm run build",
     "test:ci": "npm run test",
     "docker:dev": "docker compose --env-file .env.docker --profile dev up --build",
     "docker:test": "docker compose --env-file .env.docker --profile test run --build --rm backend-test && docker compose --env-file .env.docker --profile test run --build --rm frontend-test",
