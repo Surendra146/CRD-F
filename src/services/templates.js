@@ -5,7 +5,7 @@ const TEMPLATES_URL = '/api/templates';
 export const templatesApi = {
   getAll: async (params = {}) => {
     return apiWrapper({
-      url: TEMPLATES_URL,
+      url: `${TEMPLATES_URL}/`,
       method: 'GET',
       params,
     });
@@ -20,7 +20,7 @@ export const templatesApi = {
 
   create: async (templateData) => {
     return apiWrapper({
-      url: TEMPLATES_URL,
+      url: `${TEMPLATES_URL}/`,
       method: 'POST',
       data: templateData,
     });

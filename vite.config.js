@@ -1,7 +1,12 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
+import { validateRenderApiOrigin } from './src/config/apiContract.js'
 
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  if (process.env.RENDER === 'true') {
+    validateRenderApiOrigin({ ...loadEnv(mode, process.cwd(), 'VITE_'), ...process.env });
+  }
+  return {
   plugins: [react(), {
     name: 'public-privacy-policy',
     configureServer(server) {
@@ -37,6 +42,7 @@ export default defineConfig({
   optimizeDeps: {
     include: ['tslib']
   }
+  };
 })
 
 function servePrivacyPolicy(req, _res, next) {

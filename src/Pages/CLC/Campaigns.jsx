@@ -1,3 +1,4 @@
+import { formatApiError } from '../../config/apiContract.js';
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -25,6 +26,7 @@ import { templatesApi } from '../../services/templates.js';
 import { useAuthStore } from '../../store/authstore.js';
 import { normalizeAllowedModules } from '../../utils/moduleAccess.js';
 import { formatDate, formatNumber } from '../../utils/format.js';
+import { campaignSchedule } from '../../config/apiContract.js';
 
 function normalizeCollection(payload) {
   return payload?.data || payload?.items || payload || [];
@@ -105,8 +107,8 @@ export default function Campaigns() {
 
   const normalizedRole = String(user?.role || '').toLowerCase();
   const canManageCampaigns =
-    ['owner', 'admin'].includes(normalizedRole) ||
-    normalizeAllowedModules(user?.allowedModules).includes('campaigns');
+    normalizedRole !== 'viewer' && (['owner', 'admin'].includes(normalizedRole) ||
+    normalizeAllowedModules(user?.allowedModules).includes('campaigns'));
 
   const [showCampaignModal, setShowCampaignModal] = useState(false);
 
@@ -120,6 +122,8 @@ export default function Campaigns() {
   const templatesQuery = useQuery({
     queryKey: ['templates'],
     queryFn: () => templatesApi.getAll(),
+    enabled: ['owner', 'admin'].includes(normalizedRole) ||
+      normalizeAllowedModules(user?.allowedModules).some((module) => ['templates', 'whatsapp'].includes(module)),
   });
 
   const segmentsQuery = useQuery({
@@ -159,7 +163,7 @@ export default function Campaigns() {
       resetCampaignForm();
       queryClient.invalidateQueries({ queryKey: ['campaigns'] });
     },
-    onError: (error) => toast.error(error?.response?.data?.message || 'Failed to create campaign'),
+    onError: (error) => toast.error(formatApiError(error) || 'Failed to create campaign'),
   });
 
   const launchCampaignMutation = useMutation({
@@ -168,7 +172,7 @@ export default function Campaigns() {
       toast.success('Campaign launched');
       queryClient.invalidateQueries({ queryKey: ['campaigns'] });
     },
-    onError: (error) => toast.error(error?.response?.data?.message || 'Failed to launch campaign'),
+    onError: (error) => toast.error(formatApiError(error) || 'Failed to launch campaign'),
   });
 
   const pauseCampaignMutation = useMutation({
@@ -177,7 +181,7 @@ export default function Campaigns() {
       toast.success('Campaign paused');
       queryClient.invalidateQueries({ queryKey: ['campaigns'] });
     },
-    onError: (error) => toast.error(error?.response?.data?.message || 'Failed to pause campaign'),
+    onError: (error) => toast.error(formatApiError(error) || 'Failed to pause campaign'),
   });
 
   const resumeCampaignMutation = useMutation({
@@ -186,7 +190,7 @@ export default function Campaigns() {
       toast.success('Campaign resumed');
       queryClient.invalidateQueries({ queryKey: ['campaigns'] });
     },
-    onError: (error) => toast.error(error?.response?.data?.message || 'Failed to resume campaign'),
+    onError: (error) => toast.error(formatApiError(error) || 'Failed to resume campaign'),
   });
 
   const completeCampaignMutation = useMutation({
@@ -195,7 +199,7 @@ export default function Campaigns() {
       toast.success('Campaign completed');
       queryClient.invalidateQueries({ queryKey: ['campaigns'] });
     },
-    onError: (error) => toast.error(error?.response?.data?.message || 'Failed to complete campaign'),
+    onError: (error) => toast.error(formatApiError(error) || 'Failed to complete campaign'),
   });
 
   const toggleCampaignMulti = (key, value) => {
@@ -246,6 +250,14 @@ export default function Campaigns() {
       }
     }
 
+    let schedule;
+    try {
+      schedule = campaignSchedule(campaignForm.scheduleDate, campaignForm.scheduleTime);
+    } catch (error) {
+      toast.error(error.message);
+      return;
+    }
+
     const payload = {
       name: campaignForm.name.trim(),
       description: campaignForm.description.trim(),
@@ -255,15 +267,7 @@ export default function Campaigns() {
         type: campaignForm.audienceType,
         filters,
       },
-      ...(campaignForm.scheduleDate || campaignForm.scheduleTime
-        ? {
-            schedule: {
-              ...(campaignForm.scheduleDate ? { startDate: campaignForm.scheduleDate } : {}),
-              ...(campaignForm.scheduleTime ? { sendTime: campaignForm.scheduleTime } : {}),
-              timezone: 'Asia/Kolkata',
-            },
-          }
-        : {}),
+      ...(schedule ? { schedule } : {}),
     };
 
     createCampaignMutation.mutate(payload);

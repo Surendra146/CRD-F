@@ -3,6 +3,7 @@ import { apiWrapper } from '../config';
 const AUTH_URL = '/api/auth';
 
 export const authApi = {
+  logout: () => apiWrapper({ url: `${AUTH_URL}/logout`, method: 'POST' }),
   /* =========================
      AUTH
   ========================= */

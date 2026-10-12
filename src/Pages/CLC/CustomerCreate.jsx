@@ -1,3 +1,4 @@
+import { formatApiError } from '../../config/apiContract.js';
 import { useEffect, useState } from 'react';
 import { ArrowLeft, PlusCircle } from 'lucide-react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -157,7 +158,7 @@ export default function CustomerCreate() {
       navigate(backPath);
     },
     onError: (err) => {
-      toast.error(err?.response?.data?.message || (isEditMode ? 'Failed to update customer' : 'Failed to create customer'));
+      toast.error(formatApiError(err) || (isEditMode ? 'Failed to update customer' : 'Failed to create customer'));
     },
   });
 

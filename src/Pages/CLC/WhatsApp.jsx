@@ -39,6 +39,8 @@ import { communicationsApi } from '../../services/communications.js';
 import { customersApi } from '../../services/customers.js';
 import { segmentsApi } from '../../services/segments.js';
 import { templatesApi } from '../../services/templates.js';
+import { useAuthStore } from '../../store/authstore.js';
+import { canAccessModule } from '../../utils/rbac.js';
 import {
   formatApiError,
   whatsappSendPath,
@@ -76,7 +78,7 @@ function buildWhatsAppLink(phone, message) {
 
 function buildTemplateMessage(type, customer) {
   const name = customer?.name || 'there';
-  const offerValue = formatCurrency(customer?.lifecycle?.avgOrderValue || 500);
+  const offerValue = formatCurrency(customer?.lifecycle?.averageOrderValue || 500);
 
   if (type === 'rating') {
     return `Hi ${name}, thanks for shopping with us. We'd love your feedback. Please reply with a quick rating from 1 to 5 and share any suggestions.`;
@@ -91,7 +93,7 @@ function buildTemplateMessage(type, customer) {
 
 function buildTemplateParameters(type, customer) {
   const customerName = customer?.name || 'Customer';
-  const offerValue = formatCurrency(customer?.lifecycle?.avgOrderValue || 500);
+  const offerValue = formatCurrency(customer?.lifecycle?.averageOrderValue || 500);
 
   if (type === 'offer') {
     return [customerName, offerValue];
@@ -110,7 +112,7 @@ function buildTemplateParameters(type, customer) {
 
 function personalizeMessage(templateMessage, customer) {
   const name = customer?.name || 'Customer';
-  const discount = formatCurrency(customer?.lifecycle?.avgOrderValue || 500);
+  const discount = formatCurrency(customer?.lifecycle?.averageOrderValue || 500);
 
   return String(templateMessage || '')
     .replace(/\{\{\s*name\s*\}\}/gi, name)
@@ -119,6 +121,7 @@ function personalizeMessage(templateMessage, customer) {
 }
 
 export default function WhatsApp() {
+  const user = useAuthStore((state) => state.user);
   const [searchParams, setSearchParams] = useSearchParams();
   const currentTab = searchParams.get('tab') || 'bulk';
 
@@ -157,6 +160,7 @@ export default function WhatsApp() {
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['whatsapp-customers'],
+    enabled: canAccessModule(user, { key: 'customers' }),
     queryFn: () =>
       customersApi.getAll({
         limit: 200,
@@ -173,6 +177,7 @@ export default function WhatsApp() {
   const segmentsQuery = useQuery({
     queryKey: ['segments'],
     queryFn: () => segmentsApi.getAll(),
+    enabled: canAccessModule(user, { key: 'segments' }) || canAccessModule(user, { key: 'campaigns' }),
   });
 
   const customers = useMemo(() => normalizeCustomers(data), [data]);
@@ -458,6 +463,7 @@ export default function WhatsApp() {
             preloadedNumbers={preloadedNumbers}
             audienceLoadError={isError}
             onSwitchToScheduledQueue={() => handleTabChange('scheduled')}
+            audienceLoadIncomplete={Number(data?.pagination?.total || 0) > customers.length}
           />
         )}
 

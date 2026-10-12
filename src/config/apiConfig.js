@@ -1,16 +1,13 @@
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import { io } from 'socket.io-client';
+import { resolveBackendUrl, formatApiError } from './apiContract';
+export { formatApiError } from './apiContract';
 
 /* =========================
    BASE URL
 ========================= */
-const backendOrigin =
-  import.meta.env.VITE_BACKEND_URL ||
-  import.meta.env.VITE_API_URL ||
-  (import.meta.env.PROD ? '/' : 'http://localhost:8000');
-
-export const BASE_URL = backendOrigin.replace(/\/$/, '');
+export const BASE_URL = resolveBackendUrl(import.meta.env);
 export const SOCKET_URL = BASE_URL;
 export const SOCKET_PROGRESS_ENABLED =
   import.meta.env.VITE_ENABLE_SOCKET_PROGRESS === 'true';
@@ -44,13 +41,6 @@ export const getStoredAuthToken = () => {
 /* =========================
    ERROR FORMATTER
 ========================= */
-export const formatApiError = (error) => {
-  const detail = error?.response?.data?.detail;
-  return (typeof detail === 'string' ? detail : detail?.provider_message || detail?.message) ||
-    error?.response?.data?.message || error?.response?.data?.error ||
-    error?.message || 'Something went wrong';
-};
-
 /* =========================
    AXIOS INSTANCE
 ========================= */
@@ -69,6 +59,8 @@ api.interceptors.request.use(
 
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    } else {
+      delete config.headers.Authorization;
     }
 
     // Handle FormData safely
@@ -94,6 +86,7 @@ api.interceptors.response.use(
     const message = formatApiError(error);
 
     if (status === 401) {
+      delete api.defaults.headers.common.Authorization;
       localStorage.removeItem('auth-storage');
 
       if (!['/login', '/register'].includes(window.location.pathname)) {

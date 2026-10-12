@@ -1,7 +1,8 @@
+import { formatApiError } from '../../config/apiContract.js';
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Download, FileText } from 'lucide-react';
-import { toast } from 'sonner';
+import toast from 'react-hot-toast';
 
 import Button from '../../components/UI/button';
 import Input from '../../components/UI/input';
@@ -97,7 +98,7 @@ export default function RecentUploadReport() {
       setGeneratedTotal(total);
       toast.success(`Report generated successfully. ${total} record(s) matched.`);
     } catch (error) {
-      toast.error(error?.response?.data?.message || 'Failed to generate report');
+      toast.error(formatApiError(error) || 'Failed to generate report');
     } finally {
       setGenerating(false);
     }
@@ -109,7 +110,7 @@ export default function RecentUploadReport() {
       await uploadsApi.exportRecentUploadReportExcel(queryParams);
       toast.success('Excel report exported successfully');
     } catch (error) {
-      toast.error(error?.response?.data?.message || 'Failed to export Excel report');
+      toast.error(formatApiError(error) || 'Failed to export Excel report');
     }
   };
 
@@ -119,7 +120,7 @@ export default function RecentUploadReport() {
       await uploadsApi.exportRecentUploadReportPdf(queryParams);
       toast.success('PDF report generated successfully');
     } catch (error) {
-      toast.error(error?.response?.data?.message || 'Failed to generate PDF report');
+      toast.error(formatApiError(error) || 'Failed to generate PDF report');
     }
   };
 

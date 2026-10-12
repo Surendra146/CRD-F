@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Send,
   Calendar,
@@ -32,9 +32,12 @@ export default function BulkSenderTab({
   templates = [],
   preloadedNumbers = [],
   audienceLoadError = false,
+  audienceLoadIncomplete = false,
   onSwitchToScheduledQueue,
 }) {
   const queryClient = useQueryClient();
+  const configuration = useQuery({ queryKey: ['whatsapp-configuration'], queryFn: communicationsApi.configuration });
+  const maxRecipients = configuration.data?.data?.max_broadcast_recipients || 20;
 
   const [campaignTitle, setCampaignTitle] = useState(
     `Bulk Campaign - ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`
@@ -123,6 +126,8 @@ export default function BulkSenderTab({
     if (tpl.content?.body) {
       setMessage(tpl.content.body);
     }
+    setMetaTemplateName(tpl.whatsappTemplateName || tpl.whatsapp_template_name || '');
+    setMetaTemplateLanguage(tpl.content?.language || 'en_US');
     if (tpl.content?.buttons?.length) {
       setButtons(tpl.content.buttons);
     }
@@ -191,8 +196,12 @@ export default function BulkSenderTab({
       toast.error('Target audience has 0 reachable recipients. Choose another segment or input numbers.');
       return;
     }
-    if (targetRecipientCount > 20) {
-      toast.error('Select up to 20 recipients per broadcast, or paste a smaller list in Custom Numbers.');
+    if (audienceType !== 'custom_numbers' && audienceLoadIncomplete) {
+      toast.error('The customer preview is incomplete. Use Custom Numbers to choose the exact recipients for this broadcast.');
+      return;
+    }
+    if (targetRecipientCount > maxRecipients) {
+      toast.error(`Select up to ${maxRecipients} recipients per broadcast, or paste a smaller list in Custom Numbers.`);
       return;
     }
 

@@ -5,7 +5,7 @@ const CAMPAIGNS_URL = '/api/campaigns';
 export const campaignsApi = {
   getAll: async (params = {}) => {
     return apiWrapper({
-      url: CAMPAIGNS_URL,
+      url: `${CAMPAIGNS_URL}/`,
       method: 'GET',
       params,
     });
@@ -20,7 +20,7 @@ export const campaignsApi = {
 
   create: async (campaignData) => {
     return apiWrapper({
-      url: CAMPAIGNS_URL,
+      url: `${CAMPAIGNS_URL}/`,
       method: 'POST',
       data: campaignData,
     });

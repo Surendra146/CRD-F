@@ -1,3 +1,4 @@
+import { formatApiError } from '../../config/apiContract.js';
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -82,12 +83,12 @@ export default function Settings() {
       settingsQuery.refetch();
     },
     onError: (error) => {
-      toast.error(error?.response?.data?.message || 'Unable to update lifecycle thresholds');
+      toast.error(formatApiError(error) || 'Unable to update lifecycle thresholds');
     },
   });
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate('/login');
   };
 

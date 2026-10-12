@@ -5,7 +5,7 @@ const SEGMENTS_URL = '/api/segments';
 export const segmentsApi = {
   getAll: async (params = {}) => {
     return apiWrapper({
-      url: SEGMENTS_URL,
+      url: `${SEGMENTS_URL}/`,
       method: 'GET',
       params,
     });
@@ -13,7 +13,7 @@ export const segmentsApi = {
 
   create: async (segmentData) => {
     return apiWrapper({
-      url: SEGMENTS_URL,
+      url: `${SEGMENTS_URL}/`,
       method: 'POST',
       data: segmentData,
     });

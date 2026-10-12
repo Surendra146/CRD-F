@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 import { authApi } from '../services/auth';
-import api from '../config/apiConfig';
+import api, { formatApiError } from '../config/apiConfig';
 import { normalizeRole } from '../utils/rbac';
 
 const normalizeAuthUser = (user) =>
@@ -23,14 +23,7 @@ const getErrorMessage = (error, fallback) => {
       : 'Too many login attempts. Please wait a few minutes and try again.';
   }
 
-  return (
-    error?.response?.data?.message ||
-    error?.response?.data?.detail ||
-    error?.data?.message ||
-    error?.data?.detail ||
-    error?.message ||
-    fallback
-  );
+  return formatApiError(error) || fallback;
 };
 
 export const useAuthStore = create(
@@ -165,7 +158,12 @@ export const useAuthStore = create(
         }
       },
 
-      logout: () => {
+      logout: async () => {
+        try {
+          await authApi.logout();
+        } catch {
+          // Clear the local session even if the server is unreachable.
+        }
         set({
           user: null,
           token: null,
@@ -181,10 +179,10 @@ export const useAuthStore = create(
           const response = await authApi.getMe();
 
           set({
-            user: normalizeAuthUser(response.user),
+            user: normalizeAuthUser(response.user || response.data),
           });
-        } catch {
-          get().logout();
+        } catch (error) {
+          if (error?.response?.status === 401) await get().logout();
         }
       },
 

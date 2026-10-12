@@ -15,7 +15,7 @@ export const importSteps = [
   { num: 4, label: 'Review & Save' },
 ];
 
-export const maxImportFileSizeMb = 20;
+export const maxImportFileSizeMb = 9;
 export const maxImportFileSizeBytes = maxImportFileSizeMb * 1024 * 1024;
 
 export const terminalStatuses = new Set([

@@ -5,7 +5,7 @@ const CUSTOMERS_URL = '/api/customers';
 export const customersApi = {
   getAll: async (params = {}) => {
     return apiWrapper({
-      url: CUSTOMERS_URL,
+      url: `${CUSTOMERS_URL}/`,
       method: 'GET',
       params,
     });
@@ -20,7 +20,7 @@ export const customersApi = {
 
   create: async (customerData) => {
     return apiWrapper({
-      url: CUSTOMERS_URL,
+      url: `${CUSTOMERS_URL}/`,
       method: 'POST',
       data: customerData,
     });

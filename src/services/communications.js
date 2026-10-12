@@ -3,6 +3,7 @@ import { apiWrapper, whatsappSendPath } from '../config';
 const COMMUNICATIONS_URL = '/api/communications';
 
 export const communicationsApi = {
+  configuration: () => apiWrapper({ url: `${COMMUNICATIONS_URL}/whatsapp/configuration`, method: 'GET' }),
   // Existing single send preserved without modification
   sendWhatsApp: async (data) => {
     return apiWrapper({

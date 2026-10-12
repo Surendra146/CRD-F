@@ -5,7 +5,7 @@ const NOTIFICATIONS_URL = '/api/notifications';
 export const notificationsApi = {
   getAll: async (params = {}) => {
     return apiWrapper({
-      url: NOTIFICATIONS_URL,
+      url: `${NOTIFICATIONS_URL}/`,
       method: 'GET',
       params,
     });

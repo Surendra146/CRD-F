@@ -1,3 +1,4 @@
+import { formatApiError } from '../../config/apiContract.js';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Edit, PlusCircle, Trash2 } from 'lucide-react';
@@ -79,7 +80,7 @@ export default function SegmentsModule() {
       setForm(initialForm);
     },
     onError: (error) => {
-      toast.error(error?.response?.data?.message || 'Failed to create segment');
+      toast.error(formatApiError(error) || 'Failed to create segment');
     },
   });
 
@@ -93,7 +94,7 @@ export default function SegmentsModule() {
       setForm(initialForm);
     },
     onError: (error) => {
-      toast.error(error?.response?.data?.message || 'Failed to update segment');
+      toast.error(formatApiError(error) || 'Failed to update segment');
     },
   });
 
@@ -104,7 +105,7 @@ export default function SegmentsModule() {
       queryClient.invalidateQueries({ queryKey: ['segments'] });
     },
     onError: (error) => {
-      toast.error(error?.response?.data?.message || 'Failed to delete segment');
+      toast.error(formatApiError(error) || 'Failed to delete segment');
     },
   });
 

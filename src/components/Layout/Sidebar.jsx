@@ -77,9 +77,9 @@ export default function Sidebar({ mobile = false, onNavigate }) {
     }
   }, [expandedParentKey]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     onNavigate?.();
-    logout();
+    await logout();
     navigate('/login');
   };
 

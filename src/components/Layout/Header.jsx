@@ -13,14 +13,19 @@ import {
 
 import { notificationsApi } from '../../services/notifications';
 import { formatRelativeTime } from '../../utils/format';
+import { useAuthStore } from '../../store/authstore';
+import { canAccessModule } from '../../utils/rbac';
 
 export default function Header({ title, subtitle, actions }) {
+  const user = useAuthStore((state) => state.user);
+  const canReadNotifications = canAccessModule(user, { key: 'notifications' });
   const [showNotifications, setShowNotifications] = useState(false);
   const notificationRef = useRef(null);
 
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['notifications'],
     queryFn: () => notificationsApi.getAll(),
+    enabled: canReadNotifications,
     staleTime: 1000 * 60,
   });
 
@@ -104,6 +109,7 @@ export default function Header({ title, subtitle, actions }) {
             <button
               type="button"
               aria-label="Open notifications"
+              disabled={!canReadNotifications}
               onClick={() => {
                 setShowNotifications((current) => !current);
                 if (!showNotifications) {

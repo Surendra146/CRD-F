@@ -13,7 +13,7 @@ export const uploadsApi = {
     formData.append('type', type);
 
     return apiWrapper({
-      url: UPLOADS_URL,
+      url: `${UPLOADS_URL}/`,
       method: 'POST',
       data: formData,
     });

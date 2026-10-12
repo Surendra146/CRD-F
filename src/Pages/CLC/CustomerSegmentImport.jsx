@@ -1,3 +1,4 @@
+import { formatApiError } from '../../config/apiContract.js';
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Download, Save, Upload } from 'lucide-react';
@@ -41,7 +42,7 @@ export default function CustomerSegmentImport() {
       toast.success('Validation completed');
     },
     onError: (error) => {
-      toast.error(error?.response?.data?.message || 'Validation failed');
+      toast.error(formatApiError(error) || 'Validation failed');
     },
   });
 
@@ -66,7 +67,7 @@ export default function CustomerSegmentImport() {
       setFileInputKey((prev) => prev + 1);
     },
     onError: (error) => {
-      toast.error(error?.response?.data?.message || 'Save failed');
+      toast.error(formatApiError(error) || 'Save failed');
     },
   });
 
@@ -104,7 +105,7 @@ export default function CustomerSegmentImport() {
       await segmentsApi.exportImportErrors(errors);
       toast.success('Error list exported successfully');
     } catch (error) {
-      toast.error(error?.response?.data?.message || 'Failed to export error list');
+      toast.error(formatApiError(error) || 'Failed to export error list');
     }
   };
 
@@ -135,7 +136,7 @@ export default function CustomerSegmentImport() {
               <input
                 key={fileInputKey}
                 type="file"
-                accept=".xlsx,.xls,.csv"
+                accept=".xlsx,.csv"
                 onChange={(event) => {
                   const file = event.target.files?.[0] || null;
                   setSelectedFile(file);
