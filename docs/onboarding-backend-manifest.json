@@ -1,0 +1,82 @@
+[
+  {
+    "path": "app/models/saas.py",
+    "original_sha256": "fa071a258003fd68cf3aa9bb4635453ed36e178f7145f728cd2788b851aae744",
+    "staged_sha256": "27290115cb69caeef856402452590b764068bb49991cc19f7bd4d5baf5ed4cfd"
+  },
+  {
+    "path": "app/services/onboarding.py",
+    "original_sha256": null,
+    "staged_sha256": "69b843a9bcc3283208aad8175727507cac80de9e4e6ee12f1c942a6e5b1b308f"
+  },
+  {
+    "path": "app/routers/saas.py",
+    "original_sha256": "15da28612c834e36db9cb3114fff5cf4d8e449cdeb951a2f2b07fed3edf3d712",
+    "staged_sha256": "211c3826331146795aa8befe0aedd05c200dad05e61280214c419ca26b23917a"
+  },
+  {
+    "path": "app/routers/platform.py",
+    "original_sha256": "2f922483f129602b992a68f37cdf9ac7c7c8051de768795ad05bd8578f98264b",
+    "staged_sha256": "88c87c08b222ca94d4aca7f8e84473b1728575c88a6163247b54bdccdcee640d"
+  },
+  {
+    "path": "app/routers/whatsapp_connections.py",
+    "original_sha256": "a4bf7de253526869625ad643b6f30151c62db5874d010539c0724866be1ae5bb",
+    "staged_sha256": "a80100f289c167b4b08e56c8cdb123e90ef25bc78953375cba8a81d230154896"
+  },
+  {
+    "path": "app/services/whatsapp_connections.py",
+    "original_sha256": "6a7f1b45db561f5d5aa7457fd827567573a611bf2c322d087039557f55fcdef0",
+    "staged_sha256": "839343461abb60e9a4351f19bc9b36d302733a994991260532dedbfbe1de116e"
+  },
+  {
+    "path": "app/database/tenancy.py",
+    "original_sha256": "5bcf99ec45bb6d492488c327724947efdefe9c692307505d611e960384597183",
+    "staged_sha256": "41c80f8abcb4111c2e297a6874bcc4785ea16d75357a198aef4ab1dc616577c8"
+  },
+  {
+    "path": "alembic/versions/f91c320ab009_managed_onboarding.py",
+    "original_sha256": null,
+    "staged_sha256": "62f3e449707ba9d6f3bb2e4530a91e491084aefe46424b94125e7751c3b63119"
+  },
+  {
+    "path": "scripts/run_authorization_sandbox.py",
+    "original_sha256": "c6e3eca6d12ca2cb90fd92c437e68038f58279a806137e8525c06412f7b5180f",
+    "staged_sha256": "fe4322de15d8a6a67d1697d9b14635e6248732c137e9cb180e75b2796af44676"
+  },
+  {
+    "path": "tests/test_managed_onboarding.py",
+    "original_sha256": null,
+    "staged_sha256": "4b8cab4e4edfa0411f5f0f12e211414cfad2bbafb6a297cd78e19c41702905f1"
+  },
+  {
+    "path": "tests/test_whatsapp_connections.py",
+    "original_sha256": "2ccddaed71c3a273789244fb7af1ec015428d0a97e8affe071c6efefa3185390",
+    "staged_sha256": "b634a5dc1c1be237764810ca84d051a3dec7e1dba3fb3064cb0d1c3cbfa2f8cb"
+  },
+  {
+    "path": "tests/integration/test_saas_api.py",
+    "original_sha256": "bb2a53d67eed9eda21d05b9daef80e512dc34bd887c760cd1794456c9cf94b6a",
+    "staged_sha256": "1aed7a67d338643286cd2dca738c30e9adcd1e33516e4a32d98bb646b44a732f"
+  },
+  {
+    "path": "tests/integration/test_manual_subscriptions_api.py",
+    "original_sha256": "839034a7338c0844d8c35b0cdccd67d56f41ad74bf1cf417763eaa87f19cd9af",
+    "staged_sha256": "8d556014a7500b2a39a7f29b48c544858ec028e2c88c91729185c07b42e24d18"
+  },
+  {
+    "path": "tests/integration/test_whatsapp_connections_api.py",
+    "original_sha256": "2795a7c12a467999530015355a5e928fbf66908276e486f717b35634e91ba14d",
+    "staged_sha256": "6f96f2d6d53a269849b1a24d06a745e64b5a44daee03b676c0625e48f6490911"
+  },
+  {
+    "path": "tests/security/test_authorization_roles.py",
+    "original_sha256": "92391dc8872627a8b92dcb228948b16f838945dfadb4dd090e218f253c0854bd",
+    "staged_sha256": "6ea13e613d0ef1830029feed6a5e32be80190c5cf6312781a3bdbbd816000347"
+  },
+  {
+    "path": "MANAGED_WHATSAPP_ONBOARDING.md",
+    "original_sha256": null,
+    "staged_sha256": "164e66bff8b920daa0abf5120ab228da33d497e528fbb70be590f2129abfb98c"
+  }
+]

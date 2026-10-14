@@ -6,13 +6,41 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createServer } from 'vite';
 import react from '@vitejs/plugin-react';
 
-let server, Billing, ManualSubscriptions;
+let server, Billing, ManualSubscriptions, WhatsAppSetupAssistance, WhatsAppOnboardingQueue;
 before(async () => {
   try {
   server = await createServer({ configFile: false, plugins: [react()], optimizeDeps: { noDiscovery: true, include: [] }, server: { middlewareMode: true, hmr: false, watch: null } });
   Billing = (await server.ssrLoadModule('/src/Pages/Billing.jsx')).default;
   ManualSubscriptions = (await server.ssrLoadModule('/src/components/Platform/ManualSubscriptions.jsx')).default;
+  WhatsAppSetupAssistance = (await server.ssrLoadModule('/src/components/whatsapp/WhatsAppSetupAssistance.jsx')).default;
+  WhatsAppOnboardingQueue = (await server.ssrLoadModule('/src/components/Platform/WhatsAppOnboardingQueue.jsx')).default;
   } catch (error) { console.error(error); throw error; }
+});
+
+test('tenant setup uses assistance requests and prevents a duplicate active request', () => {
+  const empty = render(WhatsAppSetupAssistance, {}, { 'business-onboarding': { data: [] }, 'saas-subscription': { data: null } });
+  assert.match(empty, /Request Setup Assistance/);
+  assert.match(empty, /Country code/);
+  assert.doesNotMatch(empty, /Connect WhatsApp/);
+  const pending = render(WhatsAppSetupAssistance, {}, {
+    'business-onboarding': { data: [{ id:'request', business_name:'Business', phone:'919000000000', status:'requested', created_at:'2026-10-14T08:00:00Z' }] },
+    'saas-subscription': { data: null },
+  });
+  assert.match(pending, /Requested/);
+  assert.doesNotMatch(pending, /Request Setup Assistance<\/button>/);
+  assert.match(pending, /WhatsApp setup progress/);
+});
+
+test('admin queue exposes review actions and filters without a status bypass selector', () => {
+  const html = render(WhatsAppOnboardingQueue, { onViewSubscription: () => {} }, {
+    'platform-onboarding': { data: [{ id:'request', tenant_name:'Example Tenant', organization_id:12, business_name:'Business', phone:'919000000000', status:'requested', subscription_status:'expired', created_at:'2026-10-14T08:00:00Z' }] },
+  });
+  assert.match(html, /Example Tenant/);
+  assert.match(html, /Accept Request/);
+  assert.match(html, /Reject Request/);
+  assert.match(html, /View Subscription/);
+  assert.match(html, /Subscription status/);
+  assert.doesNotMatch(html, /Next status/);
 });
 after(async () => { await server?.close(); });
 

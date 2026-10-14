@@ -29,7 +29,7 @@ function loadSdk(config) {
   return sdkPromise.then(() => window.FB.init({ appId: config.app_id, version: config.graph_version, cookie: false, xfbml: false }));
 }
 
-export default function WhatsAppConnectionCard() {
+export default function WhatsAppConnectionCard({ allowAuthorization = false }) {
   const user = useAuthStore((state) => state.user);
   const organization = user?.organization_id || user?.organizationId;
   const queryClient = useQueryClient();
@@ -82,7 +82,7 @@ export default function WhatsAppConnectionCard() {
       await whatsappConnectionApi.select({ state: signup.state, waba_id: asset.waba_id, phone_number_id: asset.phone_number_id, ...(registerNew ? { registration_pin: pin } : {}) });
       setSignup(null); setAssets([]); setPin(''); setRegisterNew(false);
       await queryClient.invalidateQueries({ queryKey: key });
-      toast.success('Your organization’s WhatsApp Business account is connected');
+      toast.success('Meta authorization saved. Your administrator must verify and activate the connection.');
     } catch (error) { toast.error(errorOf(error)); }
     finally { setBusy(false); }
   }
@@ -103,15 +103,15 @@ export default function WhatsAppConnectionCard() {
     <Card className="xl:col-span-3">
       <CardHeader><CardTitle>WhatsApp Business connection</CardTitle></CardHeader>
       <CardContent className="space-y-4">
-        <p className="text-sm text-gray-600">Connect your organization’s own WhatsApp account through Meta. Messages use this connection and stay separate from other organizations.</p>
+        <p className="text-sm text-gray-600">Complete Meta authorization when requested by your administrator. The administrator verifies and activates your business connection.</p>
         {status.isPending && <p className="text-sm">Checking connection…</p>}
         {status.isError && <p role="alert" className="text-sm text-red-700">{errorOf(status.error)}</p>}
-        {connection.connected && <p className="text-sm text-emerald-700">Connected: {connection.verified_name || 'WhatsApp Business'} · {connection.display_phone_number || connection.phone_number_id}</p>}
+        {(connection.authorization_saved || connection.connected) && <p className="text-sm text-emerald-700">Meta authorization saved: {connection.verified_name || 'WhatsApp Business'} · {connection.display_phone_number || connection.phone_number_id}. Administrator verification is required.</p>}
         {connection.expired && <p role="alert" className="text-sm text-amber-700">Your Meta authorization has expired. Reconnect to send messages.</p>}
         {!status.isPending && !status.isError && !connection.signup_configured && <p className="text-sm text-amber-700">The service administrator must finish the shared Meta signup setup before accounts can connect.</p>}
         {connection.can_manage ? (
           <div className="flex flex-wrap gap-3">
-            {!signup && <Button type="button" disabled={busy || !connection.signup_configured} onClick={prepare}>{busy ? 'Preparing…' : connection.connected ? 'Reconnect WhatsApp' : 'Connect WhatsApp'}</Button>}
+            {!signup && allowAuthorization && <Button type="button" disabled={busy || !connection.signup_configured} onClick={prepare}>{busy ? 'Preparing…' : 'Prepare Requested Meta Authorization'}</Button>}
             {signup && !assets.length && <Button type="button" disabled={busy} onClick={continueWithMeta}>{busy ? 'Connecting…' : 'Continue with Meta'}</Button>}
             {signup && <Button type="button" variant="outline" disabled={busy} onClick={() => { setSignup(null); setAssets([]); setPin(''); }}>Cancel</Button>}
             {connection.connected && <Button type="button" variant="outline" disabled={busy} onClick={disconnect}>Disconnect</Button>}
@@ -127,7 +127,7 @@ export default function WhatsAppConnectionCard() {
             </label>
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={registerNew} onChange={(event) => setRegisterNew(event.target.checked)} />Register a new phone number with Cloud API</label>
             {registerNew && <label className="block text-sm">Six-digit registration PIN<input className="ml-3 rounded border p-2" type="password" inputMode="numeric" maxLength={6} autoComplete="off" value={pin} onChange={(event) => setPin(event.target.value)} /><span className="mt-1 block text-xs text-gray-500">Keep this PIN for your business. Leave registration unchecked for an already registered sender.</span></label>}
-            <Button type="button" disabled={busy || !selected} onClick={finish}>{busy ? 'Saving connection…' : 'Connect selected number'}</Button>
+            <Button type="button" disabled={busy || !selected} onClick={finish}>{busy ? 'Saving authorization…' : 'Save Requested Authorization'}</Button>
           </div>
         )}
       </CardContent>

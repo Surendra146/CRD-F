@@ -1,0 +1,1215 @@
+diff --git a/app/models/saas.py b/app/models/saas.py
+--- a/app/models/saas.py
++++ b/app/models/saas.py
+@@ -2,7 +2,7 @@
+ from datetime import datetime
+ from uuid import uuid4
+ 
+-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
++from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
+ from sqlalchemy.dialects.postgresql import JSONB
+ from sqlalchemy.orm import Mapped, mapped_column
+ 
+@@ -118,6 +118,8 @@
+ 
+ class OnboardingRequest(Base, TimestampMixin):
+     __tablename__ = "onboarding_requests"
++    __table_args__ = (Index('uq_onboarding_active_org', 'organization_id', unique=True,
++        postgresql_where=text("status IN ('requested','accepted','setup_in_progress','action_required','connected')")),)
+     id: Mapped[str] = mapped_column(String(80), primary_key=True, default=identifier)
+     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
+     organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), nullable=False)
+@@ -127,6 +129,18 @@
+     customer_message: Mapped[str | None] = mapped_column(Text)
+     provider_reference: Mapped[str | None] = mapped_column(String(255))
+     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
++    assigned_admin_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
++    required_action: Mapped[str | None] = mapped_column(String(40))
++    rejection_reason: Mapped[str | None] = mapped_column(Text)
++    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
++    setup_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
++    action_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
++    tenant_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
++    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
++    connected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
++    verified_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
++    history: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
++    verification: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+ 
+ 
+ class MessageRecord(Base, TimestampMixin):
+diff --git a/app/services/onboarding.py b/app/services/onboarding.py
+new file mode 100644
+--- /dev/null
++++ b/app/services/onboarding.py
+@@ -0,0 +1,239 @@
++"""Admin-managed onboarding; provider authorization never activates messaging."""
++import re
++from datetime import UTC, datetime, timedelta
++from types import SimpleNamespace
++
++from fastapi import HTTPException
++from sqlalchemy import select
++
++from app.models import Organization, WhatsAppConnection
++from app.models.saas import OnboardingRequest, SubscriptionPlan
++from app.services import billing
++from app.services.audit import audit
++from app.services.whatsapp_connections import authorized_assets, decrypt_token, graph
++from app.config.settings import get_settings
++from app.utils.helpers import model_to_dict
++
++ACTIVE = {'requested', 'accepted', 'setup_in_progress', 'action_required',
++          'needs_customer_action', 'provider_review', 'billing_pending'}
++TRANSITIONS = {
++    'requested': {'accepted', 'rejected', 'cancelled'},
++    'accepted': {'setup_in_progress', 'cancelled', 'failed'},
++    'setup_in_progress': {'action_required', 'connected', 'failed', 'cancelled'},
++    'action_required': {'setup_in_progress', 'failed', 'cancelled'},
++}
++
++
++def conflict(code, message):
++    raise HTTPException(409, {'code': code, 'message': message})
++
++
++def scope(row):
++    return SimpleNamespace(tenant_id=row.tenant_id, organization_id=row.organization_id)
++
++
++def eligibility(db, row, lock=False):
++    subscription = billing.subscription_for(db, scope(row), lock=lock)
++    status = billing.effective_status(subscription)
++    if not subscription:
++        return 'SUBSCRIPTION_NOT_FOUND', 'This tenant does not have an active subscription plan. Please activate or renew an eligible subscription before accepting the WhatsApp onboarding request.'
++    if status != 'active':
++        return ('SUBSCRIPTION_EXPIRED' if status == 'expired' else 'SUBSCRIPTION_NOT_ACTIVE'), 'This tenant does not have an active subscription plan. Please activate or renew an eligible subscription before continuing WhatsApp onboarding.'
++    plan = db.get(SubscriptionPlan, subscription.plan_id)
++    limit = (plan.entitlements or {}).get('whatsapp_numbers') if plan else None
++    if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
++        return 'WHATSAPP_ENTITLEMENT_REQUIRED', "This tenant's current subscription does not include WhatsApp onboarding. Please assign an eligible plan before accepting this request."
++    return None
++
++
++def require_eligible(db, row):
++    # Organization locks serialize staff mutations with manual subscription operations.
++    # Runtime billing reads must not require UPDATE privileges on subscriptions.
++    error = eligibility(db, row)
++    if error:
++        conflict(*error)
++
++
++def locked(db, request_id):
++    # Same lock order as subscription assignment: organization, then subscription/request.
++    row = db.get(OnboardingRequest, request_id)
++    if not row:
++        raise HTTPException(404, 'Onboarding request not found')
++    organization = db.scalar(select(Organization).where(Organization.id == row.organization_id,
++        Organization.tenant_id == row.tenant_id).with_for_update())
++    if not organization:
++        raise HTTPException(404, 'Business organization not found')
++    return db.scalar(select(OnboardingRequest).where(OnboardingRequest.id == request_id)
++                     .with_for_update().execution_options(populate_existing=True))
++
++
++def record(row, actor, event, **details):
++    stamp = datetime.now(UTC).isoformat()
++    row.history = [*(row.history or []), {'event': event, 'actor_id': actor.id,
++                                         'at': stamp, **details}]
++
++
++def transition(db, row, actor, status, message=None, required_action=None):
++    if status not in TRANSITIONS.get(row.status, set()):
++        conflict('INVALID_TRANSITION', f'Cannot change {row.status} to {status}')
++    if status in {'accepted', 'setup_in_progress', 'connected'}:
++        require_eligible(db, row)
++    if status in {'rejected', 'action_required', 'failed', 'cancelled'} and not str(message or '').strip():
++        raise HTTPException(422, 'A reason or instructions are required')
++    if status == 'action_required' and required_action not in {'meta_authorization', 'phone_verification', 'business_verification', 'other'}:
++        raise HTTPException(422, 'Select a required tenant action')
++    if status == 'connected':
++        require_verified(db, row)
++    previous = row.status
++    row.status = status
++    row.assigned_admin_id = actor.id
++    now = datetime.now(UTC)
++    if status == 'accepted':
++        row.accepted_at = now
++    if status == 'setup_in_progress':
++        row.setup_started_at = row.setup_started_at or now
++    if status == 'action_required':
++        row.required_action = required_action
++        row.action_requested_at = now
++        row.tenant_confirmed_at = None
++    if status == 'rejected':
++        row.rejection_reason = message.strip()
++    if status == 'connected':
++        row.connected_at = now
++        row.verified_by = actor.id
++    if message is not None:
++        row.customer_message = message.strip()
++    if status != 'connected':
++        row.verification = {}  # Every setup change invalidates previous evidence.
++    record(row, actor, status, previous_status=previous)
++    audit(db, actor, 'platform.onboarding.updated', row.id,
++          {'status': status, 'target_tenant': row.tenant_id, 'target_organization': row.organization_id})
++    return row
++
++
++def matching_connection(db, row):
++    connections = db.scalars(select(WhatsAppConnection).where(
++        WhatsAppConnection.tenant_id == row.tenant_id,
++        WhatsAppConnection.organization_id == row.organization_id)).all()
++    return next((connection for connection in connections if
++                 re.sub(r'\D', '', connection.display_phone_number or '') == row.phone), None)
++
++
++def provider_checks(connection, row):
++    if not connection or connection.tenant_id != row.tenant_id or connection.organization_id != row.organization_id:
++        conflict('CONNECTION_NOT_FOUND', 'Authorize the approved WhatsApp number for this organization first')
++    token = decrypt_token(connection.encrypted_access_token, row.tenant_id, row.organization_id)
++    assets, _ = authorized_assets(token)
++    asset = next((asset for asset in assets if asset['waba_id'] == connection.waba_id
++                  and asset['phone_number_id'] == connection.phone_number_id), None)
++    if not asset or re.sub(r'\D', '', asset.get('display_phone_number') or '') != row.phone:
++        conflict('PHONE_MISMATCH', 'Meta authorization does not match the approved business number')
++    apps = graph(connection.waba_id + '/subscribed_apps', token).get('data', [])
++    if not any(str((app.get('whatsapp_business_api_data') or {}).get('id')) == get_settings().meta_app_id for app in apps):
++        conflict('WEBHOOK_NOT_CONFIGURED', 'The WhatsApp account is not subscribed to this application')
++    subscriptions = graph(get_settings().meta_app_id + '/subscriptions',
++        get_settings().meta_app_id + '|' + get_settings().meta_app_secret).get('data', [])
++    if not any(item.get('object') == 'whatsapp_business_account' and item.get('active') is True
++               and any(field.get('name') == 'messages' for field in item.get('fields', []))
++               for item in subscriptions):
++        conflict('WEBHOOK_NOT_CONFIGURED', 'Configure an active WhatsApp messages webhook for this Meta application')
++    return token
++
++
++def verify(db, row, actor, payload):
++    if row.status != 'setup_in_progress':
++        conflict('INVALID_TRANSITION', 'Resume setup before verifying the connection')
++    require_eligible(db, row)
++    connection = matching_connection(db, row)
++    token = provider_checks(connection, row)
++    evidence = row.verification or {}
++    if (evidence.get('connection_id') == connection.id
++            and evidence.get('connection_updated_at') == connection.updated_at.isoformat()
++            and evidence.get('test_phone') == payload.test_phone
++            and evidence.get('template_name') == payload.template_name
++            and evidence.get('language') == payload.language
++            and evidence.get('checked_at')
++            and datetime.fromisoformat(evidence['checked_at']) > datetime.now(UTC) - timedelta(minutes=30)):
++        from app.models.saas import MessageRecord
++        previous = db.scalar(select(MessageRecord).where(MessageRecord.tenant_id == row.tenant_id,
++            MessageRecord.organization_id == row.organization_id,
++            MessageRecord.provider_message_id == evidence.get('test_message_id')))
++        if previous and previous.status in {'accepted', 'sent', 'delivered', 'read'}:
++            # A response retry cannot send another real test message.
++            return
++    from app.database.authorization import staff_scope
++    staff_scope(db, actor, 'onboarding.manage', resource=row.id, action='platform.onboarding.updated',
++                target_tenant=row.tenant_id, target_org=row.organization_id,
++                test_phone=payload.test_phone, test_sender=connection.phone_number_id)
++    # Use a consented recipient and an approved template; never free-form marketing.
++    from app.models.saas import ContactConsent
++    consent = db.scalar(select(ContactConsent).where(ContactConsent.tenant_id == row.tenant_id,
++        ContactConsent.organization_id == row.organization_id, ContactConsent.phone == payload.test_phone,
++        ContactConsent.opted_in.is_(True)))
++    if not consent:
++        raise HTTPException(422, 'Record explicit messaging consent for the test recipient first')
++    result = graph(connection.phone_number_id + '/messages', token, method='POST', data={
++        'messaging_product': 'whatsapp', 'to': payload.test_phone, 'type': 'template',
++        'template': {'name': payload.template_name, 'language': {'code': payload.language}}})
++    messages = result.get('messages') or []
++    if not messages or not isinstance(messages[0], dict) or not messages[0].get('id'):
++        conflict('TEST_MESSAGE_FAILED', 'Meta did not accept the permitted test message')
++    require_eligible(db, row)  # Provider calls can cross the subscription expiry instant.
++    # Provider acceptance is recorded separately from actual delivery.
++    from app.models.saas import MessageRecord
++    db.add(MessageRecord(tenant_id=row.tenant_id, organization_id=row.organization_id,
++        provider_message_id=messages[0]['id'], sender_phone_id=connection.phone_number_id,
++        recipient=payload.test_phone, status='accepted'))
++    row.verification = {'authorization': True, 'phone_match': True, 'webhook': True,
++        'test_message_id': messages[0]['id'], 'test_result': 'accepted',
++        'connection_id': connection.id, 'phone_number_id': connection.phone_number_id,
++        'waba_id': connection.waba_id, 'display_phone_number': connection.display_phone_number,
++        'connection_updated_at': connection.updated_at.isoformat(),
++        'test_phone': payload.test_phone, 'template_name': payload.template_name, 'language': payload.language,
++        'checked_at': datetime.now(UTC).isoformat()}
++    row.verified_at = datetime.now(UTC)
++    row.verified_by = actor.id
++    record(row, actor, 'verification_submitted')
++    audit(db, actor, 'platform.onboarding.updated', row.id, {'verification': 'test_accepted'})
++
++
++def require_verified(db, row):
++    evidence = row.verification or {}
++    if not all(evidence.get(key) is True for key in ('authorization', 'phone_match', 'webhook')):
++        conflict('VERIFICATION_REQUIRED', 'All provider verification checks must pass')
++    if not evidence.get('checked_at') or datetime.fromisoformat(evidence['checked_at']) < datetime.now(UTC) - timedelta(minutes=30):
++        conflict('VERIFICATION_REQUIRED', 'Verify the connection again; verification is missing or older than 30 minutes')
++    connection = matching_connection(db, row)
++    if not connection or connection.id != evidence.get('connection_id') or connection.updated_at.isoformat() != evidence.get('connection_updated_at'):
++        conflict('VERIFICATION_REQUIRED', 'Connection changed after verification; verify again')
++    provider_checks(connection, row)
++    from app.models.saas import MessageRecord
++    message = db.scalar(select(MessageRecord).where(MessageRecord.tenant_id == row.tenant_id,
++        MessageRecord.organization_id == row.organization_id,
++        MessageRecord.sender_phone_id == connection.phone_number_id,
++        MessageRecord.provider_message_id == evidence.get('test_message_id')))
++    if not message or message.status not in {'delivered', 'read'}:
++        conflict('TEST_DELIVERY_REQUIRED', 'Wait for the signed Meta webhook to confirm test message delivery before connecting')
++    require_eligible(db, row)
++    row.verification = {**evidence, 'test_result': message.status}
++
++
++def public_request(db, row):
++    data = model_to_dict(row)
++    subscription = billing.subscription_for(db, scope(row))
++    data['subscription_status'] = billing.effective_status(subscription) or 'none'
++    data['eligibility_error'] = eligibility(db, row)
++    return data
++
++
++def require_tenant_authorization(db, user):
++    db.scalar(select(Organization).where(Organization.tenant_id == user.tenant_id,
++        Organization.id == user.organization_id).with_for_update())
++    row = db.scalar(select(OnboardingRequest).where(OnboardingRequest.tenant_id == user.tenant_id,
++        OnboardingRequest.organization_id == user.organization_id,
++        OnboardingRequest.status == 'action_required',
++        OnboardingRequest.required_action == 'meta_authorization').with_for_update())
++    if not row:
++        raise HTTPException(403, 'Request setup assistance; an administrator must request Meta authorization first')
++    require_eligible(db, row)
++    return row
+diff --git a/app/routers/saas.py b/app/routers/saas.py
+--- a/app/routers/saas.py
++++ b/app/routers/saas.py
+@@ -1,5 +1,6 @@
+ from fastapi import APIRouter, Depends, HTTPException
+ from pydantic import BaseModel, ConfigDict, Field
++from datetime import UTC, datetime
+ from sqlalchemy import func, select
+ from sqlalchemy.orm import Session
+ 
+@@ -37,7 +38,8 @@
+ 
+ 
+ class OnboardingPayload(StrictModel):
+-    phone: str = Field(min_length=8, max_length=30)
++    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
++    phone: str = Field(pattern=r"^[1-9]\d{7,14}$")
+     business_name: str = Field(min_length=1, max_length=255)
+ 
+ 
+@@ -75,7 +77,8 @@
+ @router.get("/subscription")
+ def subscription(user: User = Depends(require_organization), db: Session = Depends(get_db)):
+     row = billing.subscription_for(db, user)
+-    return {"success": True, "data": public_subscription(row)}
++    from app.services.onboarding import eligibility
++    return {"success": True, "data": {**public_subscription(row), 'whatsapp_eligible': eligibility(db, user) is None} if row else None}
+ 
+ 
+ @router.get("/invoices")
+@@ -110,10 +113,14 @@
+ 
+ @router.post("/onboarding")
+ def request_onboarding(payload: OnboardingPayload, user: User = Depends(require_owner), db: Session = Depends(get_db)):
+-    billing.require_paid_subscription(db, user)
+-    from app.services.meta_whatsapp import normalize_phone
++    from app.services.onboarding import ACTIVE, record
++    db.scalar(select(Organization).where(Organization.id == user.organization_id,
++        Organization.tenant_id == user.tenant_id).with_for_update())
++    if db.scalar(scoped(OnboardingRequest, user).where(OnboardingRequest.status.in_(ACTIVE | {'connected', 'ready'}))):
++        raise HTTPException(409, 'An active or connected setup request already exists for this organization')
+     row = OnboardingRequest(tenant_id=user.tenant_id, organization_id=user.organization_id,
+-        phone=normalize_phone(payload.phone), business_name=payload.business_name, created_by=user.id)
++        phone=payload.phone, business_name=payload.business_name, created_by=user.id, status='requested')
++    record(row, user, 'requested')
+     db.add(row)
+     db.flush()
+     audit(db, user, "whatsapp.onboarding.requested", row.id)
+@@ -121,6 +128,22 @@
+     return {"success": True, "data": model_to_dict(row)}
+ 
+ 
++@router.post('/onboarding/{request_id}/verification-completed')
++def verification_completed(request_id: str, user: User = Depends(require_owner), db: Session = Depends(get_db)):
++    from app.services.onboarding import record
++    row = db.scalar(scoped(OnboardingRequest, user).where(OnboardingRequest.id == request_id).with_for_update())
++    if not row:
++        raise HTTPException(404, 'Onboarding request not found')
++    if row.status != 'action_required':
++        raise HTTPException(409, 'This request is not awaiting tenant action')
++    if not row.tenant_confirmed_at:
++        row.tenant_confirmed_at = datetime.now(UTC)
++        record(row, user, 'tenant_confirmation')
++        audit(db, user, 'whatsapp.onboarding.verification_completed', row.id)
++        db.commit()
++    return {'success': True, 'data': model_to_dict(row)}
++
++
+ @router.get("/messages")
+ def messages(user: User = Depends(require_module("whatsapp")), db: Session = Depends(get_db)):
+     return {"success": True, "data": [model_to_dict(row) for row in db.scalars(scoped(MessageRecord, user).order_by(MessageRecord.created_at.desc()).limit(200))]}
+diff --git a/app/routers/platform.py b/app/routers/platform.py
+--- a/app/routers/platform.py
++++ b/app/routers/platform.py
+@@ -114,10 +114,18 @@
+ 
+ 
+ class OnboardingUpdate(BaseModel):
+-    model_config = ConfigDict(extra="forbid")
+-    status: str = Field(pattern=r"^(needs_customer_action|provider_review|billing_pending|ready|rejected)$")
+-    customer_message: str = Field(min_length=1, max_length=2000)
++    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
++    status: str = Field(pattern=r"^(accepted|setup_in_progress|action_required|connected|rejected|failed|cancelled)$")
++    customer_message: str | None = Field(default=None, min_length=1, max_length=2000)
++    required_action: str | None = None
+     provider_reference: str | None = Field(default=None, max_length=255)
++
++
++class VerificationPayload(BaseModel):
++    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
++    test_phone: str = Field(pattern=r'^[1-9]\d{7,14}$')
++    template_name: str = Field(pattern=r'^[a-z0-9_]{1,512}$')
++    language: str = Field(pattern=r'^[a-z]{2,3}(?:_[A-Z]{2})?$')
+ 
+ 
+ class UsagePayload(BaseModel):
+@@ -193,30 +201,56 @@
+ 
+ @router.get("/onboarding")
+ def onboarding(user: User = Depends(staff_permission("onboarding.manage")), db: Session = Depends(get_control_db)):
++    from app.services.onboarding import public_request
+     staff_scope(db, user, "onboarding.manage")
+-    return {"success": True, "data": [model_to_dict(row) for row in db.scalars(select(OnboardingRequest).order_by(OnboardingRequest.created_at.desc()).limit(200))]}
++    rows = db.scalars(select(OnboardingRequest).order_by(OnboardingRequest.created_at.desc())).all()
++    data = []
++    for row in rows:
++        staff_scope(db, user, 'onboarding.manage', target_tenant=row.tenant_id, target_org=row.organization_id)
++        from app.models import Organization
++        org = db.get(Organization, row.organization_id)
++        tenant = db.get(Tenant, row.tenant_id)
++        data.append({**public_request(db, row), 'tenant_name': tenant.name if tenant else str(row.tenant_id),
++                     'organization_name': org.name if org else str(row.organization_id)})
++    return {"success": True, "data": data}
+ 
+ 
+ @router.patch("/onboarding/{request_id}")
+ def update_onboarding(request_id: str, payload: OnboardingUpdate, user: User = Depends(staff_permission("onboarding.manage")), db: Session = Depends(get_control_db)):
++    from app.services.onboarding import locked, transition
+     staff_scope(db, user, "onboarding.manage", resource=request_id, action="platform.onboarding.updated")
+     row = db.get(OnboardingRequest, request_id)
+     if not row:
+         raise HTTPException(404, "Onboarding request not found")
+     staff_scope(db, user, "onboarding.manage", resource=request_id, action="platform.onboarding.updated",
+                 target_tenant=row.tenant_id, target_org=row.organization_id)
+-    if payload.status == "ready":
+-        connected = db.execute(select(WhatsAppConnection.id, WhatsAppConnection.token_expires_at).where(WhatsAppConnection.tenant_id == row.tenant_id, WhatsAppConnection.organization_id == row.organization_id)).first()
+-        if not connected or not payload.provider_reference:
+-            raise HTTPException(409, "Customer authorization and a verified provider billing reference are required")
+-        if connected.token_expires_at and connected.token_expires_at <= datetime.now(UTC).replace(tzinfo=None):
+-            raise HTTPException(409, "The customer WhatsApp authorization has expired")
+-    row.status = payload.status
+-    row.customer_message = payload.customer_message
+-    row.provider_reference = payload.provider_reference
+-    audit(db, user, "platform.onboarding.updated", row.id, {"status": payload.status})
++    row = locked(db, request_id)
++    transition(db, row, user, payload.status, payload.customer_message, payload.required_action)
+     db.commit()
+     return {"success": True, "data": model_to_dict(row)}
++
++
++@router.post('/onboarding/{request_id}/verify')
++def verify_onboarding(request_id: str, payload: VerificationPayload,
++        user: User = Depends(staff_permission('onboarding.manage')), db: Session = Depends(get_control_db)):
++    from app.services.onboarding import locked, verify
++    staff_scope(db, user, 'onboarding.manage', resource=request_id, action='platform.onboarding.updated')
++    row = db.get(OnboardingRequest, request_id)
++    if not row:
++        raise HTTPException(404, 'Onboarding request not found')
++    staff_scope(db, user, 'onboarding.manage', resource=request_id, action='platform.onboarding.updated',
++                target_tenant=row.tenant_id, target_org=row.organization_id, test_phone=payload.test_phone)
++    row = locked(db, request_id)
++    try:
++        verify(db, row, user, payload)
++    except HTTPException:
++        # Save only a safe diagnostic; no provider bodies, access tokens or credentials.
++        row.verification = {'result': 'failed', 'checked_at': datetime.now(UTC).isoformat()}
++        audit(db, user, 'platform.onboarding.updated', row.id, {'verification': 'failed'})
++        db.commit()
++        raise
++    db.commit()
++    return {'success': True, 'data': model_to_dict(row)}
+ 
+ 
+ @router.post("/usage")
+diff --git a/app/routers/whatsapp_connections.py b/app/routers/whatsapp_connections.py
+--- a/app/routers/whatsapp_connections.py
++++ b/app/routers/whatsapp_connections.py
+@@ -53,12 +53,26 @@
+ def status(user: User = Depends(require_organization), db: Session = Depends(get_db)):
+     settings = get_settings()
+     configured = bool(settings.meta_app_id and settings.whatsapp_signup_config_id and settings.meta_app_secret and settings.whatsapp_token_encryption_key)
+-    return {"success": True, "data": {**public_connection(get_connection(db, user)),
++    connection = get_connection(db, user)
++    public = public_connection(connection)
++    public['authorization_saved'] = public['connected']
++    if connection:
++        from app.models.saas import OnboardingRequest
++        import re
++        request = db.scalar(select(OnboardingRequest).where(OnboardingRequest.tenant_id == user.tenant_id,
++            OnboardingRequest.organization_id == user.organization_id,
++            OnboardingRequest.phone == re.sub(r'\D', '', connection.display_phone_number or '')
++        ).order_by(OnboardingRequest.created_at.desc()).limit(1))
++        if request and request.status != 'connected':
++            public['connected'] = False
++    return {"success": True, "data": {**public,
+         "signup_configured": configured, "can_manage": user.role == "owner" and user.organization.owner_id == user.id}}
+ 
+ 
+ @router.post("/start")
+ def start(user: User = Depends(require_owner), db: Session = Depends(get_db)):
++    from app.services.onboarding import require_tenant_authorization
++    require_tenant_authorization(db, user)
+     settings = require_signup_configuration()
+     if settings.enforce_subscription:
+         from app.services.billing import require_paid_subscription
+@@ -74,6 +88,8 @@
+ 
+ @router.post("/exchange")
+ def exchange(payload: ExchangeRequest, user: User = Depends(require_owner), db: Session = Depends(get_db)):
++    from app.services.onboarding import require_tenant_authorization
++    require_tenant_authorization(db, user)
+     settings = require_signup_configuration()
+     attempt = attempt_for(db, user, payload.state, "started")
+     # Consume before contacting Meta. A failed exchange requires a new attempt.
+@@ -96,6 +112,8 @@
+ 
+ @router.post("/select")
+ def select_phone(payload: SelectRequest, user: User = Depends(require_owner), db: Session = Depends(get_db)):
++    from app.services.onboarding import require_tenant_authorization
++    onboarding = require_tenant_authorization(db, user)
+     require_signup_configuration()
+     attempt = attempt_for(db, user, payload.state, "selecting")
+     token = decrypt_token(attempt.encrypted_access_token, attempt.tenant_id, attempt.organization_id)
+@@ -103,6 +121,9 @@
+     asset = next((a for a in assets if a["waba_id"] == payload.waba_id and a["phone_number_id"] == payload.phone_number_id), None)
+     if not asset:
+         raise HTTPException(403, "Meta has not authorized this phone number for the current connection attempt")
++    import re
++    if re.sub(r'\D', '', asset.get('display_phone_number') or '') != onboarding.phone:
++        raise HTTPException(409, 'Select the phone number approved in your setup request')
+     connection = db.scalar(select(WhatsAppConnection).where(
+         WhatsAppConnection.organization_id == user.organization_id,
+         WhatsAppConnection.tenant_id == tenant_id_for_user(user),
+diff --git a/app/services/whatsapp_connections.py b/app/services/whatsapp_connections.py
+--- a/app/services/whatsapp_connections.py
++++ b/app/services/whatsapp_connections.py
+@@ -62,6 +62,20 @@
+         raise HTTPException(409, "Connect your organization's WhatsApp Business account in Settings first")
+     if connection.token_expires_at and connection.token_expires_at <= datetime.now(timezone.utc).replace(tzinfo=None):
+         raise HTTPException(409, "Your WhatsApp connection has expired. Reconnect it in Settings")
++    from app.models.saas import OnboardingRequest
++    from app.services.onboarding import require_eligible
++    request = db.scalar(select(OnboardingRequest).where(OnboardingRequest.tenant_id == connection.tenant_id,
++        OnboardingRequest.organization_id == connection.organization_id,
++        OnboardingRequest.phone == re.sub(r'\D', '', connection.display_phone_number or '')
++    ).order_by(OnboardingRequest.created_at.desc()).limit(1))
++    if request:
++        if request.status != 'connected':
++            raise HTTPException(409, 'An administrator must verify and activate this WhatsApp connection first')
++        require_eligible(db, request)
++    elif get_settings().enforce_subscription:
++        # Existing verified connections remain available subject to the same subscription gate.
++        from app.services.billing import number_limit
++        number_limit(db, user)
+     return SimpleNamespace(
+         whatsapp_provider="meta_cloud",
+         whatsapp_graph_version=get_settings().whatsapp_graph_version,
+diff --git a/app/database/tenancy.py b/app/database/tenancy.py
+--- a/app/database/tenancy.py
++++ b/app/database/tenancy.py
+@@ -63,7 +63,7 @@
+     for schema in ('public','hanuram_auth','hanuram_crypto'):
+         if connection.scalar(text("SELECT has_schema_privilege(current_user,:schema,'CREATE')"),{'schema':schema}):
+             raise RuntimeError('Application logins must not create objects in trusted schemas')
+-    if connection.scalar(text("SELECT version_num FROM public.alembic_version")) != 'f91c320ab008':
++    if connection.scalar(text("SELECT version_num FROM public.alembic_version")) != 'f91c320ab009':
+         raise RuntimeError('Install the reviewed authorization migrations before startup')
+     for table in ('platform_staff','subscription_plans'):
+         if not connection.scalar(text('SELECT relrowsecurity AND relforcerowsecurity FROM pg_class WHERE oid=to_regclass(:table)'), {'table': table}):
+diff --git a/alembic/versions/f91c320ab009_managed_onboarding.py b/alembic/versions/f91c320ab009_managed_onboarding.py
+new file mode 100644
+--- /dev/null
++++ b/alembic/versions/f91c320ab009_managed_onboarding.py
+@@ -0,0 +1,71 @@
++"""Extend existing onboarding records without replacing tenant security policies."""
++import importlib.util
++from pathlib import Path
++from alembic import op
++import sqlalchemy as sa
++from sqlalchemy.dialects.postgresql import JSONB
++
++revision = 'f91c320ab009'
++down_revision = 'f91c320ab008'
++branch_labels = None
++depends_on = None
++
++
++def previous_policy():
++    path = Path(__file__).with_name('f91c320ab006_verified_authorization.py')
++    spec = importlib.util.spec_from_file_location('original_authorization', path)
++    module = importlib.util.module_from_spec(spec)
++    spec.loader.exec_module(module)
++    return module.ALLOWED_SQL
++
++
++def upgrade():
++    for name in ['assigned_admin_id', 'verified_by']:
++        op.add_column('onboarding_requests', sa.Column(name, sa.Integer(), sa.ForeignKey('users.id')))
++    for name in ['accepted_at', 'setup_started_at', 'action_requested_at', 'tenant_confirmed_at', 'verified_at', 'connected_at']:
++        op.add_column('onboarding_requests', sa.Column(name, sa.DateTime(timezone=True)))
++    op.add_column('onboarding_requests', sa.Column('required_action', sa.String(40)))
++    op.add_column('onboarding_requests', sa.Column('rejection_reason', sa.Text()))
++    op.add_column('onboarding_requests', sa.Column('history', JSONB(), nullable=False, server_default=sa.text("'[]'::jsonb")))
++    op.add_column('onboarding_requests', sa.Column('verification', JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")))
++    # Preserve old status in history. Legacy ready was not fully Meta-verified;
++    # re-review rather than manufacturing a successful verification.
++    operator = op.get_bind().scalar(sa.text('SELECT current_user'))
++    quoted_operator = op.get_bind().dialect.identifier_preparer.quote(operator)
++    op.execute(f'CREATE POLICY onboarding_migration ON onboarding_requests TO {quoted_operator} USING (true) WITH CHECK (true)')
++    op.execute("""UPDATE onboarding_requests SET history=jsonb_build_array(jsonb_build_object(
++        'event','legacy_import','previous_status',status,'at',statement_timestamp())),
++        status=CASE WHEN status IN ('needs_customer_action','provider_review','billing_pending','ready')
++                    THEN 'requested' ELSE status END""")
++    op.execute('DROP POLICY onboarding_migration ON onboarding_requests')
++    # Fail safely on legacy duplicates; operators must review rather than delete history.
++    op.create_index('uq_onboarding_active_org', 'onboarding_requests', ['organization_id'], unique=True,
++        postgresql_where=sa.text("status IN ('requested','accepted','setup_in_progress','action_required','connected')"))
++    original = previous_policy()
++    old = """(tab='onboarding_requests' AND (command='select' OR (command='update' AND r->>'id'=c->>'resource')))
++            OR (tab='whatsapp_connections' AND command='select' AND coalesce(target,false))"""
++    new = """(tab='onboarding_requests' AND (command='select' OR
++                (command='update' AND coalesce(target,false) AND r->>'id'=c->>'resource')))
++            OR (coalesce(target,false) AND command='select' AND tab IN
++                ('whatsapp_connections','organizations','tenants','subscriptions','contact_consents','message_records'))
++            OR (coalesce(target,false) AND tab='message_records' AND command='insert'
++                AND r->>'recipient'=c->>'test_phone' AND r->>'sender_phone_id'=c->>'test_sender')"""
++    if old not in original:
++        raise RuntimeError('Original onboarding policy changed; review this migration')
++    policy = original.replace(old, new)
++    policy = policy.replace("tab IN ('organizations','whatsapp_connections','whatsapp_templates','contact_consents')",
++        "tab IN ('organizations','whatsapp_connections','whatsapp_templates','contact_consents','onboarding_requests','subscriptions')")
++    op.execute(policy.replace('CREATE FUNCTION hanuram_auth.allowed', 'CREATE OR REPLACE FUNCTION hanuram_auth.allowed'))
++    op.execute('GRANT SELECT ON whatsapp_connections,contact_consents,message_records TO hanuram_control')
++    op.execute('GRANT INSERT ON message_records TO hanuram_control')
++    # UPDATE USING permits row locks; WITH CHECK false prohibits actual changes.
++    c = 'hanuram_auth.context()'
++    for table, org in [('organizations', 'id')]:
++        op.execute(f"CREATE POLICY onboarding_lock ON {table} FOR UPDATE TO hanuram_control USING "
++            f"({c}->>'purpose'='staff.onboarding.manage' AND hanuram_auth.permission('onboarding.manage') "
++            f"AND tenant_id=({c}->>'target_tenant')::integer AND {org}=({c}->>'target_org')::integer) WITH CHECK (false)")
++
++
++def downgrade():
++    # Refuse destructive automatic rollback of production history.
++    raise RuntimeError('Managed onboarding rollback requires a reviewed data-preserving migration')
+diff --git a/scripts/run_authorization_sandbox.py b/scripts/run_authorization_sandbox.py
+--- a/scripts/run_authorization_sandbox.py
++++ b/scripts/run_authorization_sandbox.py
+@@ -133,7 +133,7 @@
+                 run_tests(admin, urls['sandbox_operator'],
+                     {kind:env['DATABASE_AUTH_'+kind.upper()+'_KEY'] for kind in ('identity','staff','jobs')})
+             run([sys.executable,ROOT/'tests/security/context_contention_cases.py'],cwd=ROOT,env=env)
+-            run([sys.executable,'-m','alembic','upgrade','f91c320ab008'],cwd=ROOT,env=env)
++            run([sys.executable,'-m','alembic','upgrade','f91c320ab009'],cwd=ROOT,env=env)
+             # Bound regressions that would otherwise hang HTTP dependency setup.
+             test_env={**env, 'PGOPTIONS':'-c lock_timeout=5000 -c statement_timeout=15000'}
+             run([sys.executable,ROOT/'tests/security/test_authorization_roles.py'],cwd=ROOT,env=test_env)
+diff --git a/tests/test_managed_onboarding.py b/tests/test_managed_onboarding.py
+new file mode 100644
+--- /dev/null
++++ b/tests/test_managed_onboarding.py
+@@ -0,0 +1,196 @@
++from datetime import UTC, datetime, timedelta
++from types import SimpleNamespace as NS
++from unittest.mock import Mock
++
++import pytest
++from fastapi import HTTPException
++from pydantic import ValidationError
++from app.services import onboarding as service
++from app.routers.saas import OnboardingPayload, verification_completed
++from app.routers.platform import OnboardingUpdate, VerificationPayload, staff_permission
++
++
++def request(status='requested'):
++    return NS(id='request', tenant_id=1, organization_id=2, phone='919000000000', status=status,
++        history=[], verification={}, setup_started_at=None, assigned_admin_id=None,
++        tenant_confirmed_at=None)
++
++
++def subscription(status='active', start=-1, end=1):
++    now = datetime.now(UTC)
++    return NS(status=status, plan_id='plan', current_start=now + timedelta(days=start), current_end=now + timedelta(days=end))
++
++
++@pytest.mark.parametrize('sub,entitlements,code', [
++    (None, {'whatsapp_numbers': 1}, 'SUBSCRIPTION_NOT_FOUND'),
++    (subscription(end=-1, start=-2), {'whatsapp_numbers': 1}, 'SUBSCRIPTION_EXPIRED'),
++    (subscription(status='cancelled'), {'whatsapp_numbers': 1}, 'SUBSCRIPTION_NOT_ACTIVE'),
++    (subscription(start=1, end=2), {'whatsapp_numbers': 1}, 'SUBSCRIPTION_NOT_ACTIVE'),
++    (subscription(), {}, 'WHATSAPP_ENTITLEMENT_REQUIRED'),
++    (subscription(), {'whatsapp_numbers': True}, 'WHATSAPP_ENTITLEMENT_REQUIRED'),
++    (subscription(), {'whatsapp_numbers': 0}, 'WHATSAPP_ENTITLEMENT_REQUIRED'),
++    (subscription(), {'whatsapp_numbers': 1}, None),
++])
++def test_effective_subscription_gate_is_atomic(monkeypatch, sub, entitlements, code):
++    db = Mock()
++    monkeypatch.setattr(service.billing, 'subscription_for', lambda *a, **k: sub)
++    db.get.return_value = NS(entitlements=entitlements)
++    row = request()
++    if code:
++        with pytest.raises(HTTPException) as error:
++            service.transition(db, row, NS(id=4, tenant_id=3, organization_id=5), 'accepted')
++        assert error.value.status_code == 409
++        assert error.value.detail['code'] == code
++        assert row.status == 'requested' and row.history == [] and row.assigned_admin_id is None
++        db.add.assert_not_called()
++    else:
++        service.transition(db, row, NS(id=4, tenant_id=3, organization_id=5), 'accepted')
++        assert row.status == 'accepted' and row.accepted_at and row.assigned_admin_id == 4
++        assert row.history[-1]['event'] == 'accepted'
++
++
++def test_subscription_retry_and_expiry_after_acceptance(monkeypatch):
++    db = Mock(); db.get.return_value = NS(entitlements={'whatsapp_numbers': 1})
++    sub = subscription(status='cancelled')
++    monkeypatch.setattr(service.billing, 'subscription_for', lambda *a, **k: sub)
++    row = request(); actor = NS(id=4, tenant_id=3, organization_id=5)
++    with pytest.raises(HTTPException): service.transition(db, row, actor, 'accepted')
++    sub.status = 'active'
++    service.transition(db, row, actor, 'accepted')
++    sub.current_end = datetime.now(UTC) - timedelta(seconds=1)
++    with pytest.raises(HTTPException): service.transition(db, row, actor, 'setup_in_progress')
++    assert row.status == 'accepted'
++
++
++@pytest.mark.parametrize('from_status,to_status', [('requested','connected'), ('requested','setup_in_progress'), ('accepted','connected'), ('rejected','accepted'), ('connected','requested'), ('requested','action_required')])
++def test_invalid_transition_cannot_skip_steps(from_status, to_status):
++    with pytest.raises(HTTPException) as error:
++        service.transition(Mock(), request(from_status), NS(id=4), to_status)
++    assert error.value.detail['code'] == 'INVALID_TRANSITION'
++
++
++def test_rejection_requires_reason_and_preserves_history():
++    row = request(); db = Mock(); actor = NS(id=4, tenant_id=3, organization_id=5)
++    with pytest.raises(HTTPException): service.transition(db, row, actor, 'rejected', '   ')
++    service.transition(db, row, actor, 'rejected', 'Number belongs to another business')
++    assert row.rejection_reason == 'Number belongs to another business'
++    assert row.history[-1]['previous_status'] == 'requested'
++
++
++def test_tenant_confirmation_does_not_activate_and_is_idempotent():
++    row = request('action_required'); db = Mock(); db.scalar.return_value = row
++    actor = NS(id=4, tenant_id=1, organization_id=2)
++    # Serialization helper needs a real model; inspect state directly instead.
++    from app.models.saas import OnboardingRequest
++    real = OnboardingRequest(id='request', tenant_id=1, organization_id=2, status='action_required', history=[])
++    db.scalar.return_value = real
++    verification_completed('request', actor, db)
++    verification_completed('request', actor, db)
++    assert real.status == 'action_required' and real.tenant_confirmed_at
++    assert len(real.history) == 1
++    db.commit.assert_called_once()
++
++
++def test_cross_tenant_confirmation_returns_not_found():
++    db = Mock(); db.scalar.return_value = None
++    with pytest.raises(HTTPException) as error:
++        verification_completed('other-request', NS(id=4, tenant_id=1, organization_id=2), db)
++    assert error.value.status_code == 404
++    params = db.scalar.call_args.args[0].compile().params
++    assert params['tenant_id_1'] == 1 and params['organization_id_1'] == 2
++
++
++@pytest.mark.parametrize('phone', ['123', 'letters', '090000000000', '+919000000000', '919000000000000000'])
++def test_invalid_request_phone(phone):
++    with pytest.raises(ValidationError): OnboardingPayload(phone=phone, business_name='Business')
++
++
++def test_blank_business_and_untrusted_status_fields_are_rejected():
++    with pytest.raises(ValidationError): OnboardingPayload(phone='919000000000', business_name='  ')
++    with pytest.raises(ValidationError): OnboardingUpdate(status='ready', customer_message='Bypass')
++    with pytest.raises(ValidationError): OnboardingPayload(phone='919000000000', business_name='Business', tenant_id=99)
++
++
++def test_tenant_admin_is_not_platform_staff():
++    db = Mock(); db.get.return_value = None
++    with pytest.raises(HTTPException) as error:
++        staff_permission('onboarding.manage')(NS(id=4, role='admin'), db)
++    assert error.value.status_code == 403
++
++
++def test_request_action_and_resume_keep_confirmation_history(monkeypatch):
++    monkeypatch.setattr(service, 'require_eligible', lambda *a: None)
++    db = Mock(); row = request('setup_in_progress'); actor = NS(id=4, tenant_id=3, organization_id=5)
++    service.transition(db, row, actor, 'action_required', 'Authorize your own business', 'meta_authorization')
++    assert row.required_action == 'meta_authorization' and row.action_requested_at
++    service.transition(db, row, actor, 'setup_in_progress')
++    assert row.status == 'setup_in_progress' and len(row.history) == 2
++
++
++def provider(monkeypatch):
++    monkeypatch.setattr(service, 'decrypt_token', lambda *a: 'private')
++    monkeypatch.setattr(service, 'get_settings', lambda: NS(meta_app_id='111', meta_app_secret='secret'))
++    assets = [{'waba_id':'444', 'phone_number_id':'333', 'display_phone_number':'+919000000000'}]
++    monkeypatch.setattr(service, 'authorized_assets', lambda token: (assets, None))
++    def graph(path, *args, **kwargs):
++        if path.endswith('/subscribed_apps'): return {'data':[{'whatsapp_business_api_data':{'id':'111'}}]}
++        if path.endswith('/subscriptions'): return {'data':[{'object':'whatsapp_business_account', 'active':True, 'fields':[{'name':'messages'}]}]}
++        return {'messages':[{'id':'wamid.test'}]}
++    monkeypatch.setattr(service, 'graph', graph)
++    return NS(id=1, tenant_id=1, organization_id=2, waba_id='444', phone_number_id='333', encrypted_access_token='encrypted',
++              updated_at=datetime.now(UTC), display_phone_number='+919000000000')
++
++
++def test_wrong_tenant_and_number_rejected(monkeypatch):
++    connection = provider(monkeypatch); row = request()
++    connection.organization_id = 99
++    with pytest.raises(HTTPException): service.provider_checks(connection, row)
++    connection.organization_id = 2; row.phone = '919000000001'
++    with pytest.raises(HTTPException) as error: service.provider_checks(connection, row)
++    assert error.value.detail['code'] == 'PHONE_MISMATCH'
++
++
++def test_invalid_authorization_and_failed_webhook_rejected(monkeypatch):
++    connection = provider(monkeypatch); row = request()
++    monkeypatch.setattr(service, 'authorized_assets', Mock(side_effect=HTTPException(400, 'Invalid authorization')))
++    with pytest.raises(HTTPException): service.provider_checks(connection, row)
++    connection = provider(monkeypatch)
++    monkeypatch.setattr(service, 'graph', lambda *a, **k: {'data':[]})
++    with pytest.raises(HTTPException) as error: service.provider_checks(connection, row)
++    assert error.value.detail['code'] == 'WEBHOOK_NOT_CONFIGURED'
++
++
++def test_verification_requires_consent_and_successful_test(monkeypatch):
++    connection = provider(monkeypatch); row = request('setup_in_progress'); db = Mock()
++    monkeypatch.setattr(service, 'matching_connection', lambda *a: connection)
++    monkeypatch.setattr(service, 'require_eligible', lambda *a: None)
++    payload = VerificationPayload(test_phone='919000000001', template_name='approved_test', language='en_US')
++    actor = NS(id=4, tenant_id=3, organization_id=5)
++    db.scalar.return_value = None
++    with pytest.raises(HTTPException): service.verify(db, row, actor, payload)
++    assert row.verification == {}
++    db.scalar.return_value = NS(opted_in=True)
++    original = service.graph
++    monkeypatch.setattr(service, 'graph', lambda path, *a, **k: {} if path.endswith('/messages') else original(path, *a, **k))
++    with pytest.raises(HTTPException) as error: service.verify(db, row, actor, payload)
++    assert error.value.detail['code'] == 'TEST_MESSAGE_FAILED'
++    monkeypatch.setattr(service, 'graph', original)
++    service.verify(db, row, actor, payload)
++    assert row.status == 'setup_in_progress' and row.verification['test_result'] == 'accepted'
++    db.scalar.return_value = NS(status='accepted')
++    call_count = db.add.call_count
++    service.verify(db, row, actor, payload)
++    assert db.add.call_count == call_count  # Retry cannot resend or create duplicate evidence.
++    with pytest.raises(HTTPException) as error: service.require_verified(db, row)
++    assert error.value.detail['code'] == 'TEST_DELIVERY_REQUIRED'
++    db.scalar.return_value = NS(status='delivered')
++    service.transition(db, row, actor, 'connected')
++    assert row.status == 'connected' and row.connected_at and row.verified_by == 4
++
++
++def test_subscription_expiry_prevents_connect_before_provider_calls(monkeypatch):
++    monkeypatch.setattr(service.billing, 'subscription_for', lambda *a, **k: subscription(end=-1,start=-2))
++    verify = Mock(); monkeypatch.setattr(service, 'require_verified', verify)
++    row = request('setup_in_progress')
++    with pytest.raises(HTTPException): service.transition(Mock(), row, NS(id=4), 'connected')
++    verify.assert_not_called(); assert row.status == 'setup_in_progress'
+diff --git a/tests/test_whatsapp_connections.py b/tests/test_whatsapp_connections.py
+--- a/tests/test_whatsapp_connections.py
++++ b/tests/test_whatsapp_connections.py
+@@ -13,7 +13,7 @@
+ 
+ @pytest.fixture
+ def config(monkeypatch):
+-    config = SimpleNamespace(whatsapp_token_encryption_key=Fernet.generate_key().decode(), meta_app_secret="private-secret", meta_app_id="111", whatsapp_signup_config_id="222", whatsapp_graph_version="v23.0")
++    config = SimpleNamespace(whatsapp_token_encryption_key=Fernet.generate_key().decode(), meta_app_secret="private-secret", meta_app_id="111", whatsapp_signup_config_id="222", whatsapp_graph_version="v23.0", enforce_subscription=True)
+     monkeypatch.setattr(connections, "get_settings", lambda: config)
+     return config
+ 
+@@ -43,18 +43,20 @@
+         meta_whatsapp.send_message("9000000000", "Hello")
+ 
+ 
+-def test_resolver_uses_only_the_selected_tenant_credentials(config):
+-    row = SimpleNamespace(tenant_id=1, organization_id=2, phone_number_id="333", encrypted_access_token=connections.encrypt_token("tenant-token", 1, 2), token_expires_at=None)
++def test_resolver_uses_only_the_selected_tenant_credentials(config, monkeypatch):
++    from app.services import billing
++    monkeypatch.setattr(billing, 'number_limit', lambda db, user: 1)
++    row = SimpleNamespace(tenant_id=1, organization_id=2, phone_number_id="333", encrypted_access_token=connections.encrypt_token("tenant-token", 1, 2), token_expires_at=None, display_phone_number='+919000000000')
+     class DB:
+         def scalar(self, query):
+             params = query.compile().params
+             assert params["tenant_id_1"] == 1
+             assert params["organization_id_1"] == 2
+-            return row
++            return row if 'whatsapp_connections' in str(query) else None
+     resolved = connections.resolve_credentials(DB(), SimpleNamespace(tenant_id=1, organization_id=2))
+     assert resolved.whatsapp_phone_number_id == "333"
+     assert resolved.whatsapp_access_token == "tenant-token"
+-    assert "tenant-token" not in json.dumps(connections.public_connection(SimpleNamespace(**row.__dict__, waba_id="444", display_phone_number="+919000000000", verified_name="Business")))
++    assert "tenant-token" not in json.dumps(connections.public_connection(SimpleNamespace(**row.__dict__, waba_id="444", verified_name="Business")))
+ 
+ 
+ def test_expired_connection_requires_reauthorization(config):
+diff --git a/tests/integration/test_saas_api.py b/tests/integration/test_saas_api.py
+--- a/tests/integration/test_saas_api.py
++++ b/tests/integration/test_saas_api.py
+@@ -85,7 +85,7 @@
+         assert_send_allowed(db_session, account["user"]["tenantId"], account["user"]["organizationId"], "9000000000", {"name": "approved"})
+ 
+ 
+-def test_onboarding_requires_subscription_and_never_accepts_api_token(client, account, paid):
+-    payload = {"phone": "9000000000", "business_name": "Customer company"}
++def test_onboarding_can_be_requested_before_subscription_and_never_accepts_api_token(client, account):
++    payload = {"phone": "919000000000", "business_name": "Customer company"}
+     assert client.post("/api/saas/onboarding", headers=account["headers"], json=payload).status_code == 200
+     assert client.post("/api/saas/onboarding", headers=account["headers"], json={**payload, "access_token": "secret"}).status_code == 422
+diff --git a/tests/integration/test_manual_subscriptions_api.py b/tests/integration/test_manual_subscriptions_api.py
+--- a/tests/integration/test_manual_subscriptions_api.py
++++ b/tests/integration/test_manual_subscriptions_api.py
+@@ -86,13 +86,17 @@
+     assert db_session.scalar(select(AuditEvent).where(AuditEvent.action.like("platform.subscription.%"))) is None
+ 
+ 
+-def test_future_assignment_blocks_onboarding_and_entitlements(client, account, db_session, plan):
++def test_future_assignment_allows_request_but_blocks_acceptance_and_entitlements(client, account, db_session, plan):
+     grant(db_session, account)
+     now = datetime.now(UTC)
+     data = assignment(plan, current_start=(now + timedelta(days=1)).isoformat())
+     response = client.post(url(account, "assign"), headers=account["headers"], json=data)
+     assert response.json()["data"]["effective_status"] == "scheduled"
+-    assert client.post("/api/saas/onboarding", headers=account["headers"], json={"phone": "9000000000", "business_name": "Future"}).status_code == 402
++    requested = client.post("/api/saas/onboarding", headers=account["headers"], json={"phone": "919000000000", "business_name": "Future"})
++    assert requested.status_code == 200
++    rejected = client.patch('/api/platform/onboarding/' + requested.json()['data']['id'], headers=account['headers'], json={'status':'accepted'})
++    # This fixture has subscription permissions only, never onboarding authority.
++    assert rejected.status_code == 403
+     with pytest.raises(HTTPException) as error:
+         billing.number_limit(db_session, user_for(account))
+     assert error.value.status_code == 402
+diff --git a/tests/integration/test_whatsapp_connections_api.py b/tests/integration/test_whatsapp_connections_api.py
+--- a/tests/integration/test_whatsapp_connections_api.py
++++ b/tests/integration/test_whatsapp_connections_api.py
+@@ -2,6 +2,7 @@
+ import hmac
+ import io
+ import json
++from datetime import UTC, datetime, timedelta
+ 
+ import pytest
+ from cryptography.fernet import Fernet
+@@ -28,7 +29,19 @@
+     return assets
+ 
+ 
+-def prepare(client, account):
++def prepare(client, account, db_session):
++    from app.models.saas import OnboardingRequest, Subscription, SubscriptionPlan
++    if not db_session.get(SubscriptionPlan, 'onboarding_test'):
++        db_session.add(SubscriptionPlan(id='onboarding_test', name='Test', amount_minor=100,
++            currency='INR', interval='monthly', total_cycles=1, entitlements={'whatsapp_numbers':1}))
++        db_session.flush()
++    scope = {'tenant_id':account['user']['tenant_id'], 'organization_id':account['user']['organization_id']}
++    if not db_session.query(Subscription).filter_by(**scope).first():
++        db_session.add(Subscription(**scope, plan_id='onboarding_test', status='active',
++            current_start=datetime.now(UTC)-timedelta(days=1), current_end=datetime.now(UTC)+timedelta(days=1)))
++        db_session.add(OnboardingRequest(**scope, business_name='Business', phone='919000000000',
++            status='action_required', required_action='meta_authorization', created_by=account['user']['id']))
++        db_session.commit()
+     start = client.post('/api/whatsapp-connection/start', headers=account['headers'])
+     assert start.status_code == 200, start.text
+     state = start.json()['data']['state']
+@@ -39,13 +52,21 @@
+ 
+ 
+ def test_connection_flow_is_private_and_sends_use_tenant_credentials(client, account, meta_setup, monkeypatch, db_session):
+-    state = prepare(client, account)
++    state = prepare(client, account, db_session)
+     selected = client.post('/api/whatsapp-connection/select', headers=account['headers'], json={'state': state, 'waba_id': '444', 'phone_number_id': '333'})
+     assert selected.status_code == 200, selected.text
+-    assert selected.json()['data']['connected'] is True
++    assert selected.json()['data']['connected'] is True  # Select returns provider authorization; status API gates activation.
++    status = client.get('/api/whatsapp-connection/', headers=account['headers']).json()['data']
++    assert status['connected'] is False and status['authorization_saved'] is True
+     assert 'tenant-token' not in selected.text
+     row = db_session.query(WhatsAppConnection).filter_by(organization_id=account['user']['organization_id']).one()
+     assert row.encrypted_access_token != 'tenant-token'
++    provisional = client.post('/api/communications/whatsapp', headers=account['headers'], json={'phone':'9000000000','message':'Hello'})
++    assert provisional.status_code == 409
++    # Activation itself is exercised in the managed onboarding/security tests.
++    from app.models.saas import OnboardingRequest
++    db_session.query(OnboardingRequest).filter_by(organization_id=account['user']['organization_id']).one().status = 'connected'
++    db_session.commit()
+     def provider(request, timeout):
+         assert '/333/messages' in request.full_url
+         assert request.get_header('Authorization') == 'Bearer tenant-token'
+@@ -58,21 +79,22 @@
+     assert client.post('/api/communications/whatsapp', headers=account['headers'], json={'phone': '9000000000', 'message': 'Hello'}).status_code == 409
+ 
+ 
+-def test_other_tenant_cannot_reuse_attempt_or_claim_connected_sender(client, account, account_factory, meta_setup):
++def test_other_tenant_cannot_reuse_attempt_or_claim_connected_sender(client, account, account_factory, meta_setup, db_session):
+     other = account_factory()
+-    state = prepare(client, account)
++    state = prepare(client, account, db_session)
++    prepare(client, other, db_session)
+     response = client.post('/api/whatsapp-connection/select', headers=other['headers'], json={'state': state, 'waba_id': '444', 'phone_number_id': '333'})
+     assert response.status_code == 400
+     own = client.post('/api/whatsapp-connection/select', headers=account['headers'], json={'state': state, 'waba_id': '444', 'phone_number_id': '333'})
+     assert own.status_code == 200
+     assert client.get('/api/whatsapp-connection/', headers=other['headers']).json()['data']['connected'] is False
+-    other_state = prepare(client, other)
++    other_state = prepare(client, other, db_session)
+     conflict = client.post('/api/whatsapp-connection/select', headers=other['headers'], json={'state': other_state, 'waba_id': '444', 'phone_number_id': '333'})
+     assert conflict.status_code == 409
+ 
+ 
+-def test_code_cannot_be_replayed_and_ungranted_phone_is_rejected(client, account, meta_setup):
+-    state = prepare(client, account)
++def test_code_cannot_be_replayed_and_ungranted_phone_is_rejected(client, account, meta_setup, db_session):
++    state = prepare(client, account, db_session)
+     assert client.post('/api/whatsapp-connection/exchange', headers=account['headers'], json={'state': state, 'code': 'one-use-code'}).status_code == 400
+     assert client.post('/api/whatsapp-connection/select', headers=account['headers'], json={'state': state, 'waba_id': '444', 'phone_number_id': '999'}).status_code == 403
+ 
+diff --git a/tests/security/test_authorization_roles.py b/tests/security/test_authorization_roles.py
+--- a/tests/security/test_authorization_roles.py
++++ b/tests/security/test_authorization_roles.py
+@@ -428,5 +428,102 @@
+             self.assertEqual(db.scalar(text("SELECT status FROM message_records WHERE provider_message_id='sandbox_message'")),'read')
+ 
+ 
++    def test_27_managed_onboarding_subscription_gate_and_verified_activation(self):
++        from concurrent.futures import ThreadPoolExecutor
++        from unittest.mock import patch
++        from types import SimpleNamespace
++        from app.routers.auth import register
++        from app.schemas.auth import RegisterRequest
++        from app.routers.saas import request_onboarding, OnboardingPayload, verification_completed
++        from app.routers.platform import update_onboarding, OnboardingUpdate, verify_onboarding, VerificationPayload, AssignmentPayload
++        from app.services.manual_subscriptions import operate
++        from app.services import onboarding
++        from app.services.whatsapp_connections import encrypt_token, resolve_credentials
++        from app.models import User, WhatsAppConnection
++        from app.models.saas import OnboardingRequest, ContactConsent
++        from app.config.settings import get_settings
++        from fastapi import HTTPException
++        with Session(self.control) as db:
++            account = register(RegisterRequest(email='onboarding@sandbox.invalid', password='Test-only-password!', name='Onboarding'), db)['data']
++        with Session(self.runtime) as db:
++            self.tenant(db, account)
++            row = request_onboarding(OnboardingPayload(phone='919000000002', business_name='Onboarding business'), db.get(User,account['id']), db)['data']
++        def update(status, **values):
++            with Session(self.control) as db:
++                return update_onboarding(row['id'], OnboardingUpdate(status=status, **values), self.actor(db,self.staff), db)
++        with self.assertRaises(HTTPException) as blocked:
++            update('accepted')
++        self.assertEqual(blocked.exception.detail['code'], 'SUBSCRIPTION_NOT_FOUND')
++        with Session(self.runtime) as db:
++            self.tenant(db,account)
++            self.assertEqual(db.get(OnboardingRequest,row['id']).status,'requested')
++            with self.assertRaises(HTTPException):
++                request_onboarding(OnboardingPayload(phone='919000000002',business_name='Duplicate'),db.get(User,account['id']),db)
++        with Session(self.control) as db:
++            operate(db,self.actor(db,self.staff),account['tenant_id'],account['organization_id'],'assign',
++                AssignmentPayload(request_id=uuid4(),reason='Onboarding test',plan_id='sandbox_monthly',
++                    current_start=datetime.now(UTC)-timedelta(days=1),current_end=datetime.now(UTC)+timedelta(days=1)))
++        def accept(_):
++            try: update('accepted'); return 'accepted'
++            except HTTPException as error: return error.detail['code']
++        with ThreadPoolExecutor(max_workers=2) as pool:
++            results=list(pool.map(accept,range(2)))
++        self.assertCountEqual(results,['accepted','INVALID_TRANSITION'])
++        update('setup_in_progress')
++        update('action_required',customer_message='Authorize the approved business number',required_action='meta_authorization')
++        with Session(self.runtime) as db:
++            self.tenant(db,account)
++            actor=db.get(User,account['id'])
++            verification_completed(row['id'],actor,db)
++            connection=WhatsAppConnection(tenant_id=account['tenant_id'],organization_id=account['organization_id'],
++                waba_id='444555',phone_number_id='333555',display_phone_number='+919000000002',
++                encrypted_access_token=encrypt_token('test-only-token',account['tenant_id'],account['organization_id']),
++                connected_by=account['id'],is_default=True)
++            db.add(connection)
++            db.add(ContactConsent(tenant_id=account['tenant_id'],organization_id=account['organization_id'],phone='919000000003',opted_in=True))
++            db.commit()
++            with self.assertRaises(HTTPException): resolve_credentials(db,actor)
++        update('setup_in_progress')
++        def graph(path,*args,**kwargs):
++            if path.endswith('/subscribed_apps'): return {'data':[{'whatsapp_business_api_data':{'id':'111'}}]}
++            if path.endswith('/subscriptions'): return {'data':[{'object':'whatsapp_business_account','active':True,'fields':[{'name':'messages'}]}]}
++            return {'messages':[{'id':'wamid.onboarding.test'}]}
++        assets=[{'waba_id':'444555','phone_number_id':'333555','display_phone_number':'+919000000002'}]
++        with patch.object(get_settings(),'meta_app_id','111'),patch.object(onboarding,'authorized_assets',return_value=(assets,None)),patch.object(onboarding,'graph',side_effect=graph):
++            with Session(self.control) as db:
++                verified=verify_onboarding(row['id'],VerificationPayload(test_phone='919000000003',template_name='approved_test',language='en_US'),self.actor(db,self.staff),db)
++                self.assertEqual(verified['data']['verification']['test_result'],'accepted')
++            with self.assertRaises(HTTPException) as waiting: update('connected')
++            self.assertEqual(waiting.exception.detail['code'],'TEST_DELIVERY_REQUIRED')
++            import hashlib,hmac
++            from fastapi.testclient import TestClient
++            from app.main import create_app
++            body=json.dumps({'object':'whatsapp_business_account','entry':[{'id':'444555','changes':[{'value':{
++                'metadata':{'phone_number_id':'333555'},'statuses':[{'id':'wamid.onboarding.test','status':'delivered','timestamp':str(int(time.time()))}]}}]}]}).encode()
++            signature='sha256='+hmac.new(get_settings().meta_app_secret.encode(),body,hashlib.sha256).hexdigest()
++            with TestClient(create_app()) as client:
++                result=client.post('/api/webhooks/whatsapp',content=body,headers={'x-hub-signature-256':signature})
++                self.assertEqual(result.status_code,200,result.text)
++            self.assertEqual(update('connected')['data']['status'],'connected')
++        with Session(self.runtime) as db:
++            self.tenant(db,account)
++            self.assertEqual(resolve_credentials(db,db.get(User,account['id'])).whatsapp_phone_number_id,'333555')
++            self.assertEqual(len(db.get(OnboardingRequest,row['id']).history),8)
++        from app.routers.platform import onboarding as queue
++        with Session(self.control) as db:
++            listed=queue(self.actor(db,self.staff),db)['data']
++            item=next(item for item in listed if item['id']==row['id'])
++            self.assertEqual(item['subscription_status'],'active')
++            self.assertEqual(item['status'],'connected')
++            self.assertIn('tenant_name',item)
++            self.assertNotIn('encrypted_access_token',json.dumps(item))
++        # Onboarding staff can read billing for their selected organization but cannot change it.
++        from app.database.authorization import staff_scope
++        with Session(self.control) as db:
++            actor=self.actor(db,self.staff)
++            staff_scope(db,actor,'onboarding.manage',target_tenant=account['tenant_id'],target_org=account['organization_id'],resource=row['id'],action='platform.onboarding.updated')
++            self.assertEqual(db.execute(text("UPDATE subscriptions SET status='cancelled'")).rowcount,0)
++
++
+ if __name__=='__main__':
+     unittest.main(verbosity=2)
+diff --git a/MANAGED_WHATSAPP_ONBOARDING.md b/MANAGED_WHATSAPP_ONBOARDING.md
+new file mode 100644
+--- /dev/null
++++ b/MANAGED_WHATSAPP_ONBOARDING.md
+@@ -0,0 +1,115 @@
++# Admin-managed WhatsApp onboarding
++
++This change extends the existing HanuRam onboarding request table and SaaS APIs. Tenants submit assistance requests; authorized platform staff accept, reject, start, request tenant action, verify, and connect. A tenant can authorize Meta only during an administrator-requested `meta_authorization` action. Authorization saves a provisional connection; it does not enable messaging.
++
++## Subscription and authorization rules
++
++Acceptance uses `billing.effective_status` and the assigned plan's existing positive integer `whatsapp_numbers` entitlement. No new subscription system or subscription status snapshot is stored. Missing, expired, cancelled, future-start, or otherwise inactive subscriptions return HTTP 409 with `detail.code` and `detail.message`; an active plan without WhatsApp numbers returns `WHATSAPP_ENTITLEMENT_REQUIRED`.
++
++The gate runs again for setup, connection activation, and messaging through an onboarding-managed sender. Existing connections without onboarding records retain their existing deployment subscription-enforcement setting. Production should keep `ENFORCE_SUBSCRIPTION=true`.
++
++Organization row locks use the same order as manual subscription management, so acceptance and plan changes serialize. Request row locks and a partial unique index prevent conflicting acceptance and duplicate active requests. Subscription records are never modified by onboarding. Staff actions still require explicit `onboarding.manage` membership and signed control-database authority. Viewing or changing subscriptions retains `subscriptions.read` / `subscriptions.manage` permission requirements.
++
++Meta verification uses existing encrypted credentials and provider services to check authorized WABA/phone assets, approved-number match, required scopes, the WABA app subscription, and an active application messages webhook. A consented recipient and an approved template without parameters are required for the explicit test-send action. Connection activation requires that the existing signed webhook has recorded that test as delivered or read. Test acceptance alone is insufficient. Verification expires after 30 minutes and is invalidated by connection or setup changes. Repeated identical verification within that window reuses an accepted/delivered test rather than sending again; a failed test can be retried. Provider errors never store credentials or raw provider responses.
++
++Subscription expiry preserves the technical connection and history while blocking activation or sending. No Meta assets are deleted. Tenants confirm actions without changing onboarding status; administrators review and resume setup.
++
++## Frontend files
++
++- `src/Pages/Business.jsx`: uses the assistance workflow in Business settings.
++- `src/Pages/CLC/Settings.jsx`: uses the same workflow in CRM settings.
++- `src/Pages/Platform.jsx`: replaces the arbitrary status selector with the managed queue.
++- `src/components/Platform/ManualSubscriptions.jsx`: selects the queue request's organization when opening subscription management.
++- `src/components/Platform/WhatsAppOnboardingQueue.jsx` (new): search, status/subscription filters, pagination, details/timeline, controlled actions, subscription/success dialogs, and verification panel.
++- `src/components/whatsapp/WhatsAppSetupAssistance.jsx` (new): country-code/number validation, request form, duplicate suppression, instructions, tenant confirmation, and connected information.
++- `src/components/whatsapp/WhatsAppOnboardingProgress.jsx` (new): optional-action progress tracker.
++- `src/components/whatsapp/WhatsAppConnectionCard.jsx`: administrator-requested authorization UI; removes direct tenant connect actions.
++- `src/services/onboarding.js` (new): phone validation, queue filtering, status labels, and subscription dialog selection.
++- `src/services/saas.js`: adds confirmation and verification calls.
++- `tests/onboarding.test.js` (new), `tests/subscriptionPages.test.js`: validation, dialogs, filtering, and component rendering.
++- `.gitignore`: excludes the temporary backend staging directory.
++
++## Backend files
++
++- `app/models/saas.py`: extends `OnboardingRequest` with administrator IDs, timestamps, instructions/action metadata, rejection reason, history, evidence, and the active-request index.
++- `app/services/onboarding.py` (new): lifecycle, effective subscription gate, Meta checks, delivery-gated activation, and safe history.
++- `app/routers/saas.py`: request validation/deduplication, confirmation, and computed WhatsApp subscription eligibility.
++- `app/routers/platform.py`: existing staff update endpoint now enforces transitions; adds verification and enriched queue details.
++- `app/routers/whatsapp_connections.py`: restricts authorization endpoints to administrator-requested tenant action; number matching and provisional status.
++- `app/services/whatsapp_connections.py`: blocks provisional sending and revalidates messaging eligibility.
++- `app/database/tenancy.py`: requires reviewed schema revision `f91c320ab009` at enterprise startup.
++- `alembic/versions/f91c320ab009_managed_onboarding.py` (new): additive fields, preserved legacy state history, uniqueness, and narrowly scoped policy extensions.
++- `scripts/run_authorization_sandbox.py`: tests the new migration head in the disposable cluster.
++- `tests/test_managed_onboarding.py` (new): subscription/state/verification/security cases.
++- `tests/test_whatsapp_connections.py`, `tests/integration/test_saas_api.py`, `tests/integration/test_manual_subscriptions_api.py`, `tests/integration/test_whatsapp_connections_api.py`: adapt existing regressions to the managed lifecycle.
++- `tests/security/test_authorization_roles.py`: exercises acceptance races, real restricted-role policies, provisional sending, signed delivery activation, and queue access.
++- `MANAGED_WHATSAPP_ONBOARDING.md` (new): copy of this implementation/deployment guide.
++
++## API changes
++
++Existing routes are reused; no duplicate API family was created.
++
++| Route | Behavior |
++| --- | --- |
++| `POST /api/saas/onboarding` | `{business_name, phone}`; `phone` is international digits including the country code. No active subscription is required to request help. Duplicate active/connected requests return 409. |
++| `GET /api/saas/onboarding` | Tenant-scoped request history, progress, instructions, and connection evidence. |
++| `POST /api/saas/onboarding/{id}/verification-completed` | New; idempotent tenant confirmation without activation. |
++| `GET /api/saas/subscription` | Adds computed `whatsapp_eligible` to existing subscription data. |
++| `GET /api/platform/onboarding` | Existing staff queue enriched with tenant/organization names and effective eligibility. Frontend search, filtering, and pagination operate on this snapshot. |
++| `PATCH /api/platform/onboarding/{id}` | Existing endpoint accepts controlled `status`, optional `customer_message`, optional `required_action`. `ready` and legacy skip-step statuses are no longer accepted. Subscription failures return structured 409 errors. |
++| `POST /api/platform/onboarding/{id}/verify` | New; `{test_phone, template_name, language}`. Sends an explicitly requested, consented test using an approved template. Saves evidence but keeps setup in progress. |
++| `POST /api/whatsapp-connection/{start,exchange,select}` | Existing Meta infrastructure now requires an eligible, administrator-requested authorization action. Selection must match the approved number. |
++| `GET /api/whatsapp-connection/` | Adds `authorization_saved`; `connected` stays false while an onboarding-managed connection is provisional. |
++
++Main transitions: `requested -> accepted -> setup_in_progress -> connected`; `setup_in_progress -> action_required -> setup_in_progress` is optional. Rejection requires a reason; supported failure/cancellation transitions also require an explanation. Rejected/failed/cancelled requests allow a new assistance request after administrator review. History remains on previous records.
++
++## Tests and limits
++
++- Frontend: 22 tests passed; production build passed; ESLint passed for all changed frontend source files.
++- Backend PostgreSQL regression suite: 260 tests and 6 subtests passed in the disposable PostgreSQL 18 cluster.
++- Restricted-role suite: 34 tests passed, including concurrency, signed webhook delivery, startup validation, and tenant isolation.
++- Migration chain through `f91c320ab009` successfully executed as a NOSUPERUSER/NOBYPASSRLS installation operator.
++- One existing Starlette/httpx deprecation warning remains.
++- No real Meta account, authorization, recipient, or message was used. Provider behavior was mocked; an actual Meta integration still needs staging validation with official credentials and an explicitly consented recipient.
++- Browser automation could not initialize in this session. Component rendering, validation tests, lint, and build verification passed; visual browser QA remains advisable.
++- The notification endpoint currently returns an empty list; there is no delivery service to reuse. Tenant and staff panels poll for updates every 30 seconds. Email/WhatsApp notification delivery is not implemented.
++- Queue pagination currently occurs in React using the existing queue snapshot. Large installations may need server pagination and batched eligibility queries.
++- The supplied attachment contained written requirements, with no infographic image to compare visually.
++
++## Safe migration and Render deployment
++
++Do not deploy the changed frontend against the old backend. Coordinate backend migration/code and frontend release; enterprise startup deliberately fails if revision 009 is missing.
++
++1. Review both repository diffs and back up PostgreSQL using the existing backup procedure. Disable automatic deploy while coordinating the change. Never reset tables or stamp Alembic to bypass a missing revision.
++2. Review active-request duplicates and legacy onboarding states with an authorized staff/operator session. The new index allows one request per organization in requested/accepted/setup/action-required/connected states. Legacy `needs_customer_action`, `provider_review`, `billing_pending`, and `ready` become `requested`; their original status is saved in history. They require acceptance and fresh verification. Existing Meta credentials are retained. Any organization with multiple resulting active requests causes the whole migration to roll back; reconcile them through a reviewed data-preserving process before retrying.
++3. Test a staging database copy. Run `python scripts/run_authorization_sandbox.py --legacy-tests` on a Windows host with PostgreSQL binaries (or pass `--postgres-bin` for their location). This runner never uses existing PostgreSQL services/databases.
++4. Use the existing separate migration/operator login and existing provisioned database signing keys. Revision 009 retains FORCE RLS and runtime/control role separation. Its temporary data-migration policy applies only to the installation operator and is removed in the same transaction. New control reads are confined to the selected organization; onboarding cannot mutate billing. No additional environment variables are required.
++5. After approving the reviewed migration, run `python -m alembic upgrade f91c320ab009` with the existing `MIGRATION_DATABASE_URL` in the backend's deployment environment. Check `python -m alembic current` reports `f91c320ab009` before restarting the backend. Do not run the migration from a runtime/control connection. Automated downgrade is deliberately refused because it would drop verification/history fields; rollback needs a reviewed data-preserving migration or backup recovery.
++6. Deploy backend code through the existing reviewed Render process, then frontend code. Keep existing Meta application ID/secret, signup configuration ID, encryption key, Graph version, signed-webhook secret/verify token, CORS origin, runtime/control URLs, and database authorization keys. Keep `REQUIRE_RLS=true`, `AUTO_CREATE_TABLES=false`, and production subscription enforcement enabled.
++7. Smoke-test tenant request, duplicate prevention, inactive/no-entitlement popups, eligible acceptance, rejection, tenant authorization, confirmation, verification, signed test delivery, connected state, expired-plan sending denial, and CRM/authentication. Never run a real test-send without the recipient's consent. Review legacy requests before restoring their messaging access.
++
++Meta verification follows [Meta's WhatsApp Cloud API collection](https://www.postman.com/meta/whatsapp-business-platform/documentation/wlk6lh4/whatsapp-cloud-api). Local mocks and tests are not evidence of a live Meta connection.
++
++## Git review and commit
++
++From the frontend directory:
++
++```powershell
++git status --short
++git diff --check
++git diff -- src tests .gitignore
++git add .gitignore src/Pages/Business.jsx src/Pages/CLC/Settings.jsx src/Pages/Platform.jsx src/components/Platform/ManualSubscriptions.jsx src/components/Platform/WhatsAppOnboardingQueue.jsx src/components/whatsapp/WhatsAppConnectionCard.jsx src/components/whatsapp/WhatsAppOnboardingProgress.jsx src/components/whatsapp/WhatsAppSetupAssistance.jsx src/services/onboarding.js src/services/saas.js tests/onboarding.test.js tests/subscriptionPages.test.js docs/managed-whatsapp-onboarding.md
++git commit -m "Add admin-managed WhatsApp onboarding UI"
++```
++
++From the backend directory, after applying the reviewed files:
++
++```powershell
++git status --short
++git diff --check
++git diff -- app alembic scripts tests
++git add app/models/saas.py app/services/onboarding.py app/routers/saas.py app/routers/platform.py app/routers/whatsapp_connections.py app/services/whatsapp_connections.py app/database/tenancy.py alembic/versions/f91c320ab009_managed_onboarding.py scripts/run_authorization_sandbox.py tests/test_managed_onboarding.py tests/test_whatsapp_connections.py tests/integration/test_saas_api.py tests/integration/test_manual_subscriptions_api.py tests/integration/test_whatsapp_connections_api.py tests/security/test_authorization_roles.py MANAGED_WHATSAPP_ONBOARDING.md
++git commit -m "Enforce managed WhatsApp onboarding and subscription gates"
++```
++
++These commands are for review and optional manual commit. No push or deployment has been performed. Existing unrelated tracked cache deletions and `migration_review.sql` in the backend must not be included in this feature commit.

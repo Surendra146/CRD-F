@@ -8,7 +8,7 @@ import { platformApi } from '../../services/saas';
 import { createManualSubscriptionClient } from '../../services/manualSubscriptions';
 import { formatApiError } from '../../services/api';
 
-export default function ManualSubscriptions({ permissions }) {
+export default function ManualSubscriptions({ permissions, selectedOrganization = null }) {
   const client = useQueryClient();
   const canRead = permissions.includes('subscriptions.read');
   const canManage = permissions.includes('subscriptions.manage');
@@ -16,12 +16,12 @@ export default function ManualSubscriptions({ permissions }) {
   const subscriptions = useQuery({ queryKey: ['platform-subscriptions'], queryFn: platformApi.subscriptions, enabled: canRead });
   const plans = useQuery({ queryKey: ['platform-subscription-plans'], queryFn: platformApi.subscriptionPlans, enabled: canRead });
   const [submitOperation] = useState(() => createManualSubscriptionClient(platformApi.manageSubscription));
-  const [form, setForm] = useState({ organization: '', operation: 'assign', plan_id: '', current_start: '', current_end: '', days: 30, at_period_end: true, reason: '' });
+  const [form, setForm] = useState({ organization: selectedOrganization ? String(selectedOrganization) : '', operation: 'assign', plan_id: '', current_start: '', current_end: '', days: 30, at_period_end: true, reason: '' });
   const [busy, setBusy] = useState(false);
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
   const organization = organizations.data?.data?.find((row) => String(row.id) === form.organization);
   const current = subscriptions.data?.data?.find((row) => row.organization_id === organization?.id);
-  if (!canRead) return canManage ? <p>Subscription controls require subscriptions.read as well as subscriptions.manage.</p> : null;
+  if (!canRead) return canManage || selectedOrganization ? <p>Subscription controls require subscriptions.read. Ask an authorized subscription administrator to review this organization.</p> : null;
   const submit = async (event) => {
     event.preventDefault();
     if (!organization || !canManage || busy) return;

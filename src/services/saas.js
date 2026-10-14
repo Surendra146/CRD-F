@@ -9,6 +9,7 @@ export const saasApi = {
   usage: () => api.get('/api/saas/usage'),
   onboarding: () => api.get('/api/saas/onboarding'),
   requestOnboarding: (data) => api.post('/api/saas/onboarding', data),
+  confirmOnboarding: (id) => api.post(`/api/saas/onboarding/${encodeURIComponent(id)}/verification-completed`),
   numbers: () => api.get('/api/saas/numbers'),
   defaultNumber: (id) => api.post(`/api/saas/numbers/${encodeURIComponent(id)}/default`),
   disconnectNumber: (id) => api.delete(`/api/saas/numbers/${encodeURIComponent(id)}`),
@@ -32,5 +33,6 @@ export const platformApi = {
   createPlan: (data) => api.post('/api/platform/plans', data),
   onboarding: () => api.get('/api/platform/onboarding'),
   updateOnboarding: (id, data) => api.patch(`/api/platform/onboarding/${encodeURIComponent(id)}`, data),
+  verifyOnboarding: (id, data) => api.post(`/api/platform/onboarding/${encodeURIComponent(id)}/verify`, data),
   audit: () => api.get('/api/platform/audit'),
 };
