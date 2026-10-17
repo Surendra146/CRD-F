@@ -100,6 +100,8 @@ export default function Sidebar({ mobile = false, onNavigate }) {
             ? item.children.some((child) => location.pathname.startsWith(child.href))
             : location.pathname.startsWith(item.href);
 
+          const isExpanded = expandedParentKey === item.key || (item.key === 'subscription' && isParentActive);
+
           if (!hasChildren) {
             return (
               <NavLink
@@ -108,7 +110,7 @@ export default function Sidebar({ mobile = false, onNavigate }) {
                 onClick={onNavigate}
                 className={({ isActive }) =>
                   cn(
-                    'flex items-center px-4 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                    'flex items-center px-4 py-2.5 rounded-lg text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-teal-400',
                     isActive
                       ? 'bg-primary-600 text-white'
                       : 'text-gray-300 hover:bg-gray-800 hover:text-white'
@@ -125,11 +127,13 @@ export default function Sidebar({ mobile = false, onNavigate }) {
             <div key={item.key} className="space-y-1">
               <button
                 type="button"
+                aria-expanded={isExpanded}
+                aria-controls={`sidebar-${item.key}`}
                 onClick={() =>
                   setExpandedParentKey((prev) => (prev === item.key ? '' : item.key))
                 }
                 className={cn(
-                  'flex w-full items-center justify-between px-4 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                  'flex w-full items-center justify-between px-4 py-2.5 rounded-lg text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-teal-400',
                   isParentActive
                     ? 'bg-gray-800 text-white'
                     : 'text-gray-300 hover:bg-gray-800 hover:text-white'
@@ -143,21 +147,22 @@ export default function Sidebar({ mobile = false, onNavigate }) {
                 <ChevronDown
                   className={cn(
                     'h-4 w-4 transition-transform',
-                    expandedParentKey === item.key ? 'rotate-180' : 'rotate-0'
+                    isExpanded ? 'rotate-180' : 'rotate-0'
                   )}
                 />
               </button>
 
-              {expandedParentKey === item.key ? (
-                <div className="ml-4 space-y-1 border-l border-gray-800 pl-3">
+              {isExpanded ? (
+                <div id={`sidebar-${item.key}`} className="ml-4 space-y-1 border-l border-gray-800 pl-3">
                   {item.children.map((child) => (
                     <NavLink
                       key={child.key}
                       to={child.href}
+                      end={child.end}
                       onClick={onNavigate}
                       className={({ isActive }) =>
                         cn(
-                          'flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                          'flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-teal-400',
                           isActive
                             ? 'bg-primary-600 text-white'
                             : 'text-gray-300 hover:bg-gray-800 hover:text-white'

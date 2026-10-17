@@ -59,6 +59,7 @@ export default function AppRoutes() {
       <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
         <Route path="/business" element={<PageLoader><RoleRoute roles={['owner']}><Business /></RoleRoute></PageLoader>} />
         <Route path="/billing" element={<PageLoader><RoleRoute roles={['owner']}><Billing /></RoleRoute></PageLoader>} />
+        <Route path="/platform/onboarding" element={<PageLoader><Platform page="onboarding" /></PageLoader>} />
         <Route path="/platform" element={<PageLoader><Platform /></PageLoader>} />
         <Route path="/access-required" element={<div className="p-8"><h1 className="text-xl font-semibold">Workspace access required</h1><p className="mt-2 text-gray-600">Ask your business owner or administrator to assign access to your account.</p></div>} />
         <Route path="/dashboard" element={<PageLoader><ModuleRoute moduleKey="dashboard"><Dashboard /></ModuleRoute></PageLoader>} />

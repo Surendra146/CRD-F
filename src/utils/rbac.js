@@ -1,3 +1,4 @@
+import { canAccessPlatformPage } from './platformAccess.js';
 import { moduleAccessKey, normalizeAllowedModules } from './moduleAccess.js';
 
 export function normalizeRole(role) {
@@ -14,7 +15,8 @@ export function canAccessModule(user, module) {
   const normalizedRole = normalizeRole(user.role);
   const assignedModules = normalizeAllowedModules(user?.allowedModules);
   const accessKey = moduleAccessKey(module);
-  if (accessKey === 'platform') return Boolean(user.platformPermissions?.length);
+  if (accessKey === 'subscription') return false; // The parent is visible only through authorized children.
+  if (accessKey === 'platform') return canAccessPlatformPage(user.platformPermissions, module.platformPage);
   if (!hasRoleAccess(user, module?.roles || [])) return false;
   // Ownership/administration is tenant scoped. Platform staff has no implicit tenant access.
   if (normalizedRole === 'owner' || normalizedRole === 'admin') return Boolean(accessKey);

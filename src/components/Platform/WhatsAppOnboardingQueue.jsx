@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Eye, FileText } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import Button from '../UI/button';
@@ -23,6 +24,7 @@ export default function WhatsAppOnboardingQueue({ onViewSubscription }) {
   const [requiredAction, setRequiredAction] = useState('meta_authorization');
   const [test, setTest] = useState({ test_phone: '', template_name: '', language: 'en_US' });
   const [busy, setBusy] = useState(false);
+  const [pendingAction, setPendingAction] = useState('');
   const rows = filterRequests(requests.data?.data || [], search, status, subscription);
   const lastPage = Math.max(0, Math.ceil(rows.length / 10) - 1);
   const currentPage = Math.min(page, lastPage);
@@ -30,6 +32,7 @@ export default function WhatsAppOnboardingQueue({ onViewSubscription }) {
   const act = async (row, nextStatus, values = {}) => {
     if (busy) return;
     setBusy(true);
+    setPendingAction(`${row.id}:${nextStatus}`);
     try {
       if (nextStatus === 'verify') await platformApi.verifyOnboarding(row.id, values);
       else await platformApi.updateOnboarding(row.id, { status: nextStatus, ...values });
@@ -40,44 +43,44 @@ export default function WhatsAppOnboardingQueue({ onViewSubscription }) {
       const subscriptionError = subscriptionDialog(error);
       if (subscriptionError) setDialog({ ...subscriptionError, row, subscription: true });
       else toast.error(formatApiError(error));
-    } finally { setBusy(false); }
+    } finally { setBusy(false); setPendingAction(''); }
   };
   const viewSubscription = (row) => { setDialog(null); onViewSubscription(row.organization_id); };
   const actionDialog = (row, action) => { setMessage(''); setDialog({ row, action, title: action === 'rejected' ? 'Reject Request' : 'Request Tenant Action', message: action === 'rejected' ? 'Enter a reason. The tenant will see this rejection reason.' : 'Provide instructions for the tenant and select the required action.' }); };
   return <Card><CardHeader><CardTitle>WhatsApp Onboarding Queue</CardTitle></CardHeader><CardContent className="space-y-4">
     <div className="grid gap-3 md:grid-cols-3">
       <Input label="Search tenant or business" aria-label="Search tenant or business" value={search} onChange={(event) => { setSearch(event.target.value); setPage(0); }} />
-      <label className="text-sm">Onboarding status<select className="mt-2 block w-full rounded border p-2" value={status} onChange={(event) => { setStatus(event.target.value); setPage(0); }}><option value="">All statuses</option>{['requested', 'accepted', 'setup_in_progress', 'action_required', 'connected', 'rejected', 'failed', 'cancelled'].map((value) => <option key={value} value={value}>{statusLabel(value)}</option>)}</select></label>
-      <label className="text-sm">Subscription status<select className="mt-2 block w-full rounded border p-2" value={subscription} onChange={(event) => { setSubscription(event.target.value); setPage(0); }}><option value="">All subscriptions</option>{['none', 'active', 'expired', 'cancelled', 'scheduled'].map((value) => <option key={value} value={value}>{statusLabel(value)}</option>)}</select></label>
+      <label className="text-sm">Onboarding status<select className="mt-2 block min-h-10 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" value={status} onChange={(event) => { setStatus(event.target.value); setPage(0); }}><option value="">All statuses</option>{['requested', 'accepted', 'setup_in_progress', 'action_required', 'connected', 'rejected', 'failed', 'cancelled'].map((value) => <option key={value} value={value}>{statusLabel(value)}</option>)}</select></label>
+      <label className="text-sm">Subscription status<select className="mt-2 block min-h-10 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" value={subscription} onChange={(event) => { setSubscription(event.target.value); setPage(0); }}><option value="">All subscriptions</option>{['none', 'active', 'expired', 'cancelled', 'scheduled'].map((value) => <option key={value} value={value}>{statusLabel(value)}</option>)}</select></label>
     </div>
     {requests.isPending && <p role="status">Loading onboarding queue…</p>}
-    {requests.isError && <p role="alert">{formatApiError(requests.error)} <Button variant="outline" onClick={() => requests.refetch()}>Retry</Button></p>}
+    {requests.isError && <p role="alert">{formatApiError(requests.error)} <Button variant="secondary" onClick={() => requests.refetch()}>Retry</Button></p>}
     <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr>{['Tenant', 'Organization ID', 'Business', 'WhatsApp number', 'Requested', 'Subscription', 'Onboarding', 'Assigned administrator', 'Actions'].map((label) => <th className="whitespace-nowrap border-b p-3" key={label}>{label}</th>)}</tr></thead><tbody>
-      {rows.slice(currentPage * 10, currentPage * 10 + 10).map((row) => <tr key={row.id}>
+      {rows.slice(currentPage * 10, currentPage * 10 + 10).map((row) => <tr key={row.id} className="border-b border-gray-100 align-top hover:bg-gray-50">
         <td className="p-3">{row.tenant_name || row.tenant_id}</td><td className="p-3">{row.organization_id}</td><td className="p-3">{row.business_name}</td><td className="whitespace-nowrap p-3">+{row.phone}</td><td className="p-3">{new Date(row.created_at).toLocaleDateString('en-IN')}</td><td className="p-3">{statusLabel(row.subscription_status)}</td><td className="p-3">{statusLabel(row.status)}</td><td className="p-3">{row.assigned_admin_id || 'Unassigned'}</td>
-        <td className="space-y-2 p-3"><Button variant="outline" onClick={() => { setSelected(row.id); setMessage(''); }}>Details</Button><Button variant="outline" onClick={() => viewSubscription(row)}>View Subscription</Button>{row.status === 'requested' && <><Button disabled={busy} onClick={() => act(row, 'accepted')}>Accept Request</Button><Button variant="outline" disabled={busy} onClick={() => actionDialog(row, 'rejected')}>Reject Request</Button></>}</td>
+        <td className="p-3 align-top"><div className="flex w-56 max-w-full flex-wrap items-center gap-2"><Button size="sm" variant="secondary" aria-label={`View onboarding details for ${row.business_name}`} aria-expanded={selected === row.id} onClick={() => { setSelected(row.id); setMessage(''); }}><Eye className="h-4 w-4" aria-hidden="true" />Details</Button>{onViewSubscription && <Button size="sm" variant="secondary" aria-label={`View subscription for ${row.business_name}`} onClick={() => viewSubscription(row)}><FileText className="h-4 w-4" aria-hidden="true" />View Subscription</Button>}{row.status === 'requested' && <><Button size="sm" disabled={busy} isLoading={pendingAction === `${row.id}:accepted`} onClick={() => act(row, 'accepted')}>Accept Request</Button><Button size="sm" variant="danger" disabled={busy} onClick={() => actionDialog(row, 'rejected')}>Reject Request</Button></>}</div></td>
       </tr>)}
     </tbody></table></div>
     {!requests.isPending && !requests.isError && rows.length === 0 && <p>No matching requests.</p>}
-    <div className="flex items-center gap-3"><Button variant="outline" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Previous</Button><span>Page {currentPage + 1} of {lastPage + 1} · {rows.length} requests</span><Button variant="outline" disabled={currentPage >= lastPage} onClick={() => setPage(currentPage + 1)}>Next</Button></div>
+    <div className="flex flex-wrap items-center justify-end gap-3"><Button variant="secondary" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Previous</Button><span>Page {currentPage + 1} of {lastPage + 1} · {rows.length} requests</span><Button variant="secondary" disabled={currentPage >= lastPage} onClick={() => setPage(currentPage + 1)}>Next</Button></div>
     {detail && <section className="space-y-4 rounded-xl border border-blue-200 bg-blue-50/30 p-4">
-      <div className="flex justify-between"><h3 className="font-semibold">{detail.business_name} · Organization {detail.organization_id}</h3><Button variant="outline" onClick={() => setSelected(null)}>Close details</Button></div>
+      <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold">{detail.business_name} · Organization {detail.organization_id}</h3><Button variant="secondary" onClick={() => setSelected(null)}>Close details</Button></div>
       <p>Requested +{detail.phone} · Subscription: {statusLabel(detail.subscription_status)} · Administrator: {detail.assigned_admin_id || 'Unassigned'}</p>
       {detail.eligibility_error && <p role="alert" className="text-amber-800">{detail.eligibility_error[1]}</p>}
       <WhatsAppOnboardingProgress request={detail} />
       {detail.customer_message && <p className="whitespace-pre-wrap">Instructions: {detail.customer_message}</p>}
       {detail.tenant_confirmed_at && <p className="text-green-700">Tenant confirmed completion {new Date(detail.tenant_confirmed_at).toLocaleString('en-IN')}. Review before resuming.</p>}
       <div className="flex flex-wrap gap-3">
-        {['accepted', 'action_required'].includes(detail.status) && <Button disabled={busy} onClick={() => act(detail, 'setup_in_progress')}>{detail.status === 'action_required' ? 'Resume Setup' : 'Start Setup'}</Button>}
-        {detail.status === 'setup_in_progress' && <Button variant="outline" disabled={busy} onClick={() => actionDialog(detail, 'action_required')}>Request Tenant Action</Button>}
+        {['accepted', 'action_required'].includes(detail.status) && <Button disabled={busy} isLoading={pendingAction === `${detail.id}:setup_in_progress`} onClick={() => act(detail, 'setup_in_progress')}>{detail.status === 'action_required' ? 'Resume Setup' : 'Start Setup'}</Button>}
+        {detail.status === 'setup_in_progress' && <Button variant="secondary" disabled={busy} onClick={() => actionDialog(detail, 'action_required')}>Request Tenant Action</Button>}
       </div>
       {detail.status === 'setup_in_progress' && <form className="space-y-3 rounded-xl border bg-white p-4" onSubmit={(event) => { event.preventDefault(); act(detail, 'verify', test); }}>
         <h4 className="font-semibold">Verify Connection</h4><p className="text-sm">Verify tenant authorization, approved number, permissions, webhook configuration, and a test message. This sends one real approved template to the consented test recipient below.</p>
         <Input aria-label="Consented test recipient" label="Consented test recipient (country code and digits)" required pattern="[1-9][0-9]{7,14}" value={test.test_phone} onChange={(event) => setTest({ ...test, test_phone: event.target.value })} />
         <Input aria-label="Approved test template" label="Approved template without parameters" required pattern="[a-z0-9_]+" value={test.template_name} onChange={(event) => setTest({ ...test, template_name: event.target.value })} />
         <Input aria-label="Template language" label="Template language" required value={test.language} onChange={(event) => setTest({ ...test, language: event.target.value })} />
-        <Button type="submit" disabled={busy}>Verify & Send Permitted Test</Button>
-        <Button type="button" disabled={busy || !detail.verification?.test_message_id} onClick={() => act(detail, 'connected')}>Mark as Connected</Button>
+        <div className="flex flex-wrap items-center gap-3"><Button type="submit" disabled={busy} isLoading={pendingAction === `${detail.id}:verify`}>Verify & Send Permitted Test</Button>
+        <Button type="button" variant="secondary" isLoading={pendingAction === `${detail.id}:connected`} disabled={busy || !detail.verification?.test_message_id} onClick={() => act(detail, 'connected')}>Mark as Connected</Button></div>
       </form>}
       {detail.verification && Object.keys(detail.verification).length > 0 && <dl className="grid gap-2 text-sm md:grid-cols-2">{Object.entries(detail.verification).map(([key, value]) => <div key={key}><dt className="font-medium">{statusLabel(key)}</dt><dd>{String(value)}</dd></div>)}</dl>}
       <h4 className="font-medium">Setup timeline</h4><ol className="space-y-2 text-sm">{(detail.history || []).map((event, index) => <li key={index}>{new Date(event.at).toLocaleString('en-IN')} · {statusLabel(event.event)} · Actor {event.actor_id || 'Migration'}</li>)}</ol>
@@ -86,10 +89,10 @@ export default function WhatsAppOnboardingQueue({ onViewSubscription }) {
       {dialog?.action && <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); act(dialog.row, dialog.action, { customer_message: message.trim(), ...(dialog.action === 'action_required' ? { required_action: requiredAction } : {}) }); }}>
         <label className="block">{dialog.action === 'rejected' ? 'Rejection reason' : 'Administrator instructions'}<textarea className="mt-2 w-full rounded border p-3" required maxLength={2000} value={message} onChange={(event) => setMessage(event.target.value)} /></label>
         {dialog.action === 'action_required' && <label>Required action<select className="ml-2 rounded border p-2" value={requiredAction} onChange={(event) => setRequiredAction(event.target.value)}>{['meta_authorization', 'phone_verification', 'business_verification', 'other'].map((value) => <option key={value} value={value}>{statusLabel(value)}</option>)}</select></label>}
-        <Button type="submit" disabled={busy || !message.trim()}>Confirm</Button>
+        <div className="flex justify-end"><Button type="submit" variant={dialog.action === 'rejected' ? 'danger' : 'primary'} isLoading={busy} disabled={!message.trim()}>{dialog.action === 'rejected' ? 'Reject Request' : 'Send instructions'}</Button></div>
       </form>}
-      {dialog?.subscription && <Button onClick={() => viewSubscription(dialog.row)}>View Subscription</Button>}
-      <Button variant="outline" disabled={busy} onClick={() => setDialog(null)}>{dialog?.success ? 'Continue' : 'Close'}</Button>
+      <div className="flex flex-wrap justify-end gap-3">{dialog?.subscription && !onViewSubscription && <p className="w-full text-sm text-gray-600">Ask a subscription administrator to activate or renew this tenant’s eligible subscription.</p>}{dialog?.subscription && onViewSubscription && <Button onClick={() => viewSubscription(dialog.row)}>View Subscription</Button>}
+      <Button variant="secondary" disabled={busy} onClick={() => setDialog(null)}>{dialog?.success ? 'Continue' : 'Close'}</Button></div>
     </DialogContent></Dialog>
   </CardContent></Card>;
 }

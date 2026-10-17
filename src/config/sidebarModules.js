@@ -12,8 +12,14 @@ import {
 
 export const sidebarModules = [
   { key: 'business', accessKey: 'business', label: 'Business & WhatsApp', href: '/business', icon: Settings, roles: ['owner'], enabled: true },
-  { key: 'billing', accessKey: 'billing', label: 'Subscription & Billing', href: '/billing', icon: PanelsTopLeft, roles: ['owner'], enabled: true },
-  { key: 'platform', accessKey: 'platform', label: 'Platform Console', href: '/platform', icon: ShieldCheck, enabled: true },
+  { key: 'billing', accessKey: 'billing', label: 'My subscription & billing', href: '/billing', icon: PanelsTopLeft, roles: ['owner'], enabled: true },
+  {
+    key: 'subscription', accessKey: 'subscription', label: 'Subscription', icon: PanelsTopLeft, enabled: true,
+    children: [
+      { key: 'platform', accessKey: 'platform', platformPage: 'console', label: 'Platform Console', href: '/platform', end: true, icon: ShieldCheck, enabled: true },
+      { key: 'platform-onboarding', accessKey: 'platform', platformPage: 'onboarding', label: 'WhatsApp Onboarding', href: '/platform/onboarding', icon: ChevronRight, enabled: true },
+    ],
+  },
   {
     key: 'dashboard',
     accessKey: 'dashboard',
