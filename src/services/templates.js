@@ -3,6 +3,10 @@ import { apiWrapper } from '../config';
 const TEMPLATES_URL = '/api/templates';
 
 export const templatesApi = {
+  submit: (id) => apiWrapper({ url: `/api/templates/${id}/submit`, method: 'POST' }),
+  refresh: (id) => apiWrapper({ url: `/api/templates/${id}/refresh`, method: 'POST' }),
+  upload: (id, file) => { const data = new FormData(); data.append('file', file); return apiWrapper({ url: `/api/templates/${id}/media`, method: 'POST', data }); },
+  preview: (id, assetId) => apiWrapper({ url: `/api/templates/${id}/media/${assetId}`, responseType: 'blob' }),
   getAll: async (params = {}) => {
     return apiWrapper({
       url: `${TEMPLATES_URL}/`,

@@ -22,6 +22,8 @@ import {
 } from '../../components/UI/table.jsx';
 import { campaignsApi } from '../../services/campaigns.js';
 import { segmentsApi } from '../../services/segments.js';
+import { saasApi } from '../../services/saas.js';
+import { isSupportedApprovedTemplate } from '../../utils/metaTemplates.js';
 import { templatesApi } from '../../services/templates.js';
 import { useAuthStore } from '../../store/authstore.js';
 import { normalizeAllowedModules } from '../../utils/moduleAccess.js';
@@ -92,6 +94,9 @@ const initialCampaignForm = {
   description: '',
   type: 'one_time',
   template: '',
+  sender: '',
+  mediaAsset: '',
+  templateMappings: {},
   audienceType: 'all',
   segmentId: '',
   statuses: [],
@@ -140,7 +145,14 @@ export default function Campaigns() {
     [savedSegments, campaigns]
   );
 
-  const templateOptions = templates.map((template) => ({
+  const numbers = useQuery({ queryKey: ['whatsapp-numbers'], queryFn: saasApi.numbers });
+  const accounts = numbers.data?.data || [];
+  const account = accounts.find(n => n.phone_number_id === campaignForm.sender) || accounts.find(n => n.is_default) || accounts[0];
+  const selectedTemplate = templates.find(t => String(t._id || t.id) === String(campaignForm.template));
+  const approved = selectedTemplate?.workflow?.approved;
+  const mediaHeader = ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(approved?.header_type);
+  const externalScopes = (approved?.components || []).flatMap(p => p.type === 'BUTTONS' ? (p.buttons || []).flatMap((b, i) => b.type === 'URL' && /\{\{/.test(b.url || '') ? [[`button_${i}`, 1]] : []) : ['HEADER', 'BODY'].includes(p.type) ? [[p.type.toLowerCase(), new Set((p.text || '').match(/\{\{\d+\}\}/g) || []).size]] : []).filter(([scope, count]) => count && !approved?.parameters?.[scope]?.length);
+  const templateOptions = templates.filter(t => isSupportedApprovedTemplate(t, account?.waba_id)).map((template) => ({
     label: `${template.name} (${template.category || 'custom'})`,
     value: template._id,
   }));
@@ -223,6 +235,7 @@ export default function Campaigns() {
       return;
     }
 
+    if (mediaHeader && !campaignForm.mediaAsset) { toast.error('Select send-time media for this template'); return; }
     if (!campaignForm.template) {
       toast.error('Please choose a template');
       return;
@@ -266,6 +279,9 @@ export default function Campaigns() {
       audience: {
         type: campaignForm.audienceType,
         filters,
+        sender_phone_number_id: campaignForm.sender || account?.phone_number_id,
+        template_media_asset_id: campaignForm.mediaAsset || undefined,
+        template_mappings: campaignForm.templateMappings,
       },
       ...(schedule ? { schedule } : {}),
     };
@@ -510,16 +526,22 @@ export default function Campaigns() {
               ]}
             />
 
+            <Select label="Sending account / WABA" value={campaignForm.sender} onChange={e => setCampaignForm(prev => ({ ...prev, sender: e.target.value, template: '', mediaAsset: '', templateMappings: {} }))} options={[{ label: 'Default account', value: '' }, ...accounts.filter(n => n.connected).map(n => ({ label: `${n.display_phone_number || n.phone_number_id} / ${n.waba_id}`, value: n.phone_number_id }))]} />
             <Select
               label="Template *"
               value={campaignForm.template}
               onChange={(event) =>
-                setCampaignForm((prev) => ({ ...prev, template: event.target.value }))
+                setCampaignForm((prev) => ({ ...prev, template: event.target.value, mediaAsset: '', templateMappings: {} }))
               }
               options={[{ label: 'Select template', value: '' }, ...templateOptions]}
             />
           </div>
 
+          {mediaHeader && <div className="space-y-2 rounded-lg border p-3">
+            <Select label={`Send-time ${approved.header_type.toLowerCase()} (shared asset)`} value={campaignForm.mediaAsset} onChange={e => setCampaignForm(prev => ({ ...prev, mediaAsset: e.target.value }))} options={[{ label: 'Select uploaded media', value: '' }, ...(selectedTemplate?.workflow?.assets || []).filter(a => a.type.toUpperCase() === approved.header_type).map(a => ({ label: a.name, value: a.id }))]} />
+            <p className="text-xs text-gray-500">Upload or replace assets in Templates or Bulk Sender before creating this campaign.</p>
+          </div>}
+          {externalScopes.map(([scope, count]) => <div key={scope} className="space-y-2"><p className="text-sm">{scope} recipient mappings</p>{Array.from({ length: count }, (_, i) => <select key={i} className="rounded border p-2" value={campaignForm.templateMappings[scope]?.[i] || ''} onChange={e => { const values = [...(campaignForm.templateMappings[scope] || Array(count).fill(''))]; values[i] = e.target.value; setCampaignForm(prev => ({ ...prev, templateMappings: { ...prev.templateMappings, [scope]: values } })); }}><option value="">Parameter {i + 1}: select field</option>{['name', 'phone', 'email', 'city', 'lifecycle.segment', 'lifecycle.totalSpent', 'demographics.city'].map(f => <option key={f}>{f}</option>)}</select>)}</div>)}
           <Select
             label="Audience Type"
             value={campaignForm.audienceType}

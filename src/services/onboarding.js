@@ -21,3 +21,24 @@ export function filterRequests(rows, search, status, subscription) {
   return rows.filter((row) => (!term || `${row.tenant_name || ''} ${row.business_name} ${row.organization_id}`.toLowerCase().includes(term))
     && (!status || row.status === status) && (!subscription || row.subscription_status === subscription));
 }
+
+
+export function testDelivery(evidence = {}) {
+  const status = evidence.test_result || 'pending';
+  const messages = {
+    accepted: 'Meta accepted the request; delivery is not confirmed.',
+    sent: 'Meta reports that the message was sent; delivery is pending.',
+    delivered: 'WhatsApp message successfully delivered.',
+    read: 'Recipient has read the message.',
+    failed: 'WhatsApp delivery failed.',
+    pending: 'No delivery confirmation has been received yet.',
+  };
+  return { status, connected: ['delivered', 'read'].includes(status),
+    message: messages[status] || messages.pending };
+}
+
+export function deliveryPolling(rows = [], now = Date.now()) {
+  return rows.some((row) => row.status === 'setup_in_progress'
+    && ['accepted', 'sent'].includes(row.verification?.test_result)
+    && now - Date.parse(row.verification?.checked_at) < 30 * 60 * 1000) ? 10000 : false;
+}

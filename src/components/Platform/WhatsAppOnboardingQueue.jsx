@@ -8,12 +8,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '../UI/card';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '../UI/dialog';
 import WhatsAppOnboardingProgress from '../whatsapp/WhatsAppOnboardingProgress';
 import { platformApi } from '../../services/saas';
-import { statusLabel, filterRequests, subscriptionDialog } from '../../services/onboarding';
+import { statusLabel, filterRequests, subscriptionDialog, testDelivery, deliveryPolling } from '../../services/onboarding';
 import { formatApiError } from '../../services/api';
 
 export default function WhatsAppOnboardingQueue({ onViewSubscription }) {
   const client = useQueryClient();
-  const requests = useQuery({ queryKey: ['platform-onboarding'], queryFn: platformApi.onboarding, refetchInterval: 30000 });
+  const requests = useQuery({ queryKey: ['platform-onboarding'], queryFn: platformApi.onboarding, refetchInterval: (query) => deliveryPolling(query.state.data?.data), refetchIntervalInBackground: false });
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [subscription, setSubscription] = useState('');
@@ -34,11 +34,12 @@ export default function WhatsAppOnboardingQueue({ onViewSubscription }) {
     setBusy(true);
     setPendingAction(`${row.id}:${nextStatus}`);
     try {
-      if (nextStatus === 'verify') await platformApi.verifyOnboarding(row.id, values);
+      let verificationResponse;
+      if (nextStatus === 'verify') verificationResponse = await platformApi.verifyOnboarding(row.id, values);
       else await platformApi.updateOnboarding(row.id, { status: nextStatus, ...values });
       await Promise.all(['platform-onboarding', 'platform-overview', 'platform-audit'].map((key) => client.invalidateQueries({ queryKey: [key] })));
       if (nextStatus === 'accepted') setDialog({ title: 'Request Accepted', message: 'WhatsApp onboarding request accepted successfully. You can now start the setup process.', success: true });
-      else { setDialog(null); toast.success(nextStatus === 'verify' ? 'Meta accepted the test. Wait for webhook delivery before marking Connected.' : 'Request updated'); }
+      else { setDialog(null); toast.success(nextStatus === 'verify' ? (verificationResponse?.test_action === 'reused' || verificationResponse?.data?.test_action === 'reused' ? 'Existing test reused; see its current delivery status below.' : 'Meta accepted the test; delivery is not confirmed.') : 'Request updated'); }
     } catch (error) {
       const subscriptionError = subscriptionDialog(error);
       if (subscriptionError) setDialog({ ...subscriptionError, row, subscription: true });
@@ -80,9 +81,29 @@ export default function WhatsAppOnboardingQueue({ onViewSubscription }) {
         <Input aria-label="Approved test template" label="Approved template without parameters" required pattern="[a-z0-9_]+" value={test.template_name} onChange={(event) => setTest({ ...test, template_name: event.target.value })} />
         <Input aria-label="Template language" label="Template language" required value={test.language} onChange={(event) => setTest({ ...test, language: event.target.value })} />
         <div className="flex flex-wrap items-center gap-3"><Button type="submit" disabled={busy} isLoading={pendingAction === `${detail.id}:verify`}>Verify & Send Permitted Test</Button>
-        <Button type="button" variant="secondary" isLoading={pendingAction === `${detail.id}:connected`} disabled={busy || !detail.verification?.test_message_id} onClick={() => act(detail, 'connected')}>Mark as Connected</Button></div>
+        <Button type="button" variant="secondary" isLoading={pendingAction === `${detail.id}:connected`} disabled={busy || !testDelivery(detail.verification).connected} onClick={() => act(detail, 'connected')}>Mark as Connected</Button></div>
       </form>}
-      {detail.verification && Object.keys(detail.verification).length > 0 && <dl className="grid gap-2 text-sm md:grid-cols-2">{Object.entries(detail.verification).map(([key, value]) => <div key={key}><dt className="font-medium">{statusLabel(key)}</dt><dd>{String(value)}</dd></div>)}</dl>}
+      {detail.verification?.test_message_id && <section className="space-y-2 rounded-lg border bg-white p-4" aria-live="polite">
+        <h4 className="font-semibold">Test Message Details</h4>
+        <p>{testDelivery(detail.verification).message}</p>
+        {['accepted', 'sent'].includes(detail.verification.test_result) && <p>Existing test pending. Repeating the same test within 30 minutes reuses its original message ID. Failed tests may be retried after one minute; stale tests after 30 minutes.</p>}
+        <dl className="grid gap-2 text-sm md:grid-cols-2">{Object.entries({
+          Recipient: detail.verification.test_phone, Template: detail.verification.template_name,
+          Language: detail.verification.language, 'Meta message ID': detail.verification.test_message_id,
+          'API acceptance': detail.verification.api_acceptance || 'accepted',
+          'Latest delivery status': detail.verification.test_result,
+          'Last status update': detail.verification.status_updated_at || 'No callback yet',
+          'Webhook configured': detail.verification.webhook ? 'Yes' : 'No',
+          'Status callback received': detail.verification.callback_received ? 'Yes' : 'No',
+          'Last callback received': detail.verification.webhook_received_at || 'None',
+          'Sent at': detail.verification.sent_at || 'Unconfirmed',
+          'Delivered at': detail.verification.delivered_at || 'Unconfirmed',
+          'Read at': detail.verification.read_at || 'Unconfirmed',
+        }).map(([key, value]) => <div key={key}><dt className="font-medium">{key}</dt><dd className="break-all">{String(value || 'Unknown')}</dd></div>)}</dl>
+        {detail.verification.test_result === 'failed' && (detail.verification.error || []).map((error, index) => <p role="alert" key={index}>Meta error {error.code || 'unknown'}: {error.message || error.title || 'No reason provided'}{error.error_data?.details ? ` — ${error.error_data.details}` : ''}</p>)}
+        <Button type="button" variant="secondary" disabled={requests.isFetching} onClick={() => requests.refetch()}>Refresh delivery status</Button>
+      </section>}
+      {detail.verification && Object.keys(detail.verification).length > 0 && <dl className="grid gap-2 text-sm md:grid-cols-2">{Object.entries(detail.verification).map(([key, value]) => <div key={key}><dt className="font-medium">{statusLabel(key)}</dt><dd>{typeof value === 'object' ? JSON.stringify(value) : String(value)}</dd></div>)}</dl>}
       <h4 className="font-medium">Setup timeline</h4><ol className="space-y-2 text-sm">{(detail.history || []).map((event, index) => <li key={index}>{new Date(event.at).toLocaleString('en-IN')} · {statusLabel(event.event)} · Actor {event.actor_id || 'Migration'}</li>)}</ol>
     </section>}
     <Dialog open={Boolean(dialog)} onOpenChange={(open) => { if (!open && !busy) setDialog(null); }}><DialogContent className="bg-white"><DialogTitle>{dialog?.title}</DialogTitle><DialogDescription>{dialog?.message}</DialogDescription>

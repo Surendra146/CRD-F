@@ -20,6 +20,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../../components/UI
 import Select from '../../../components/UI/select.jsx';
 import Input from '../../../components/UI/input.jsx';
 import Badge from '../../../components/UI/badge.jsx';
+import { isSupportedApprovedTemplate } from '../../../utils/metaTemplates.js';
+import { templatesApi } from '../../../services/templates.js';
+import { saasApi } from '../../../services/saas.js';
+import { TemplateMediaPreview } from '../Templates.jsx';
 import { communicationsApi } from '../../../services/communications.js';
 import InteractiveButtonsBuilder from './InteractiveButtonsBuilder.jsx';
 import MediaAttachmentManager from './MediaAttachmentManager.jsx';
@@ -50,8 +54,17 @@ export default function BulkSenderTab({
 
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [message, setMessage] = useState('');
-  const [metaTemplateName, setMetaTemplateName] = useState('');
-  const [metaTemplateLanguage, setMetaTemplateLanguage] = useState('en_US');
+  const [sender, setSender] = useState('');
+  const [templateAsset, setTemplateAsset] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [externalMappings, setExternalMappings] = useState({});
+  const numbers = useQuery({ queryKey: ['whatsapp-numbers'], queryFn: saasApi.numbers });
+  const accounts = numbers.data?.data || [];
+  const account = accounts.find(n => n.phone_number_id === sender) || accounts.find(n => n.is_default) || accounts[0];
+  const selectedTemplate = templates.find(t => String(t._id || t.id) === String(selectedTemplateId));
+  const approved = selectedTemplate?.workflow?.approved;
+  const requiredHeader = approved?.header_type;
+  const externalScopes = (approved?.components || []).flatMap(p => p.type === 'BUTTONS' ? (p.buttons || []).flatMap((b, i) => b.type === 'URL' && /\{\{/.test(b.url || '') ? [[`button_${i}`, 1]] : []) : ['HEADER', 'BODY'].includes(p.type) ? [[p.type.toLowerCase(), new Set((p.text || '').match(/\{\{\d+\}\}/g) || []).size]] : []).filter(([scope, count]) => count && !approved?.parameters?.[scope]?.length);
   const [buttons, setButtons] = useState([]);
   const [mediaFiles, setMediaFiles] = useState([]);
 
@@ -110,32 +123,25 @@ export default function BulkSenderTab({
   const templateOptions = useMemo(() => {
     return [
       { value: '', label: 'Choose a template or write custom message' },
-      ...templates.map((t) => ({
+      ...templates.filter(t => isSupportedApprovedTemplate(t, account?.waba_id)).map((t) => ({
         value: t._id,
         label: t.name || t.whatsappTemplateName || 'Template',
       })),
     ];
-  }, [templates]);
+  }, [templates, account?.waba_id]);
 
   const handleApplyTemplate = (templateId) => {
     setSelectedTemplateId(templateId);
-    if (!templateId) return;
-    const tpl = templates.find((t) => t._id === templateId);
-    if (!tpl) return;
-
-    if (tpl.content?.body) {
-      setMessage(tpl.content.body);
-    }
-    setMetaTemplateName(tpl.whatsappTemplateName || tpl.whatsapp_template_name || '');
-    setMetaTemplateLanguage(tpl.content?.language || 'en_US');
-    if (tpl.content?.buttons?.length) {
-      setButtons(tpl.content.buttons);
-    }
+    setTemplateAsset(''); setExternalMappings({}); setButtons([]); setMediaFiles([]);
+    if (!templateId) { setMessage(''); return; }
+    const tpl = templates.find(t => String(t._id || t.id) === String(templateId));
+    if (!tpl?.workflow?.approved) return;
+    setMessage(tpl.workflow.approved.components?.find(c => c.type === 'BODY')?.text || '');
     toast.success(`Template "${tpl.name}" loaded`);
   };
 
   const handleInsertToken = (token) => {
-    setMessage((prev) => `${prev} ${token}`);
+    if (!selectedTemplateId) setMessage((prev) => `${prev} ${token}`);
   };
 
   // Preview resolved message
@@ -183,12 +189,15 @@ export default function BulkSenderTab({
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (bulkSendMutation.isPending || uploading) return;
+    if (selectedTemplateId && approved?.waba_id !== account?.waba_id) { toast.error('Select a template for this sending account'); return; }
+    if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(requiredHeader) && !templateAsset) { toast.error('Select send-time media'); return; }
 
     if (!campaignTitle.trim()) {
       toast.error('Please enter a campaign title');
       return;
     }
-    if (!message.trim() && !metaTemplateName.trim()) {
+    if (!message.trim() && !selectedTemplateId) {
       toast.error('Please write a message template');
       return;
     }
@@ -227,7 +236,8 @@ export default function BulkSenderTab({
         numbers: audienceType === 'custom_numbers' ? audienceAudited.map((a) => a.phone) : undefined,
       },
       message: message.trim(),
-      template: metaTemplateName.trim() ? { name: metaTemplateName.trim(), language: { code: metaTemplateLanguage.trim() } } : undefined,
+      template: selectedTemplateId ? { id: Number(selectedTemplateId), media_asset_id: templateAsset || undefined, mappings: externalMappings } : undefined,
+      sender_phone_number_id: sender || undefined,
       buttons,
       media_files: mediaFiles,
       batch_delay_seconds: Number(batchDelaySeconds),
@@ -399,19 +409,28 @@ export default function BulkSenderTab({
             <CardContent className="space-y-4">
               <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
                 <p>Custom text requires the recipient to have messaged your business within the last 24 hours. Otherwise use an approved Meta template. A saved CRM message is not a Meta-approved template.</p>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <label>Approved Meta template name (optional)
-                    <Input value={metaTemplateName} onChange={(e) => setMetaTemplateName(e.target.value)} placeholder="hello_world" />
+                  <label className="mt-3 block">Sending account / WABA
+                    <select className="mt-1 w-full rounded border bg-white p-2" value={sender} onChange={e => { setSender(e.target.value); handleApplyTemplate(''); }}>
+                      <option value="">Default connected account</option>{accounts.filter(n => n.connected).map(n => <option key={n.phone_number_id} value={n.phone_number_id}>{n.display_phone_number || n.phone_number_id} / {n.waba_id}</option>)}
+                    </select>
                   </label>
-                  <label>Exact template language code
-                    <Input value={metaTemplateLanguage} onChange={(e) => setMetaTemplateLanguage(e.target.value)} placeholder="en_US" />
-                  </label>
-                </div>
-                <p className="mt-2 text-xs">Use a template with no dynamic parameters here. Leave the name empty to send the custom text below. Meta controls the template content.</p>
+                  {approved && <p className="mt-2 text-xs">Sending exact approved template: {approved.name} ({approved.language}). Recipient fields are resolved separately for every message.</p>}
+                  {externalScopes.map(([scope, count]) => <div key={scope} className="mt-3"><p>{scope} recipient mappings</p>{Array.from({ length: count }, (_, i) => <select key={i} className="m-1 rounded border p-2" value={externalMappings[scope]?.[i] || ''} onChange={e => { const values = [...(externalMappings[scope] || Array(count).fill(''))]; values[i] = e.target.value; setExternalMappings({ ...externalMappings, [scope]: values }); }}><option value="">Parameter {i + 1}: select field</option>{['name', 'phone', 'email', 'city', 'lifecycle.segment', 'lifecycle.totalSpent', 'demographics.city'].map(f => <option key={f}>{f}</option>)}</select>)}</div>)}
+                  {['IMAGE', 'VIDEO', 'DOCUMENT'].includes(requiredHeader) && <div className="mt-3 space-y-2">
+                    <p>Send-time {requiredHeader.toLowerCase()} · shared campaign asset</p>
+                    <select className="w-full rounded border bg-white p-2" value={templateAsset} onChange={e => setTemplateAsset(e.target.value)}><option value="">Select uploaded media</option>{(selectedTemplate?.workflow?.assets || []).filter(a => a.type.toUpperCase() === requiredHeader).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select>
+                    <input type="file" disabled={uploading} accept={{ IMAGE: 'image/jpeg,image/png', VIDEO: 'video/mp4', DOCUMENT: 'application/pdf' }[requiredHeader]} onChange={async e => {
+                      const file = e.target.files[0]; if (!file || uploading) return; setUploading(true);
+                      try { const result = await templatesApi.upload(selectedTemplateId, file); setTemplateAsset(result.data.id); await queryClient.invalidateQueries({ queryKey: ['templates'] }); toast.success('Send-time media uploaded'); }
+                      catch (error) { toast.error(error?.response?.data?.detail || 'Media upload failed'); } finally { setUploading(false); }
+                    }} />
+                    <TemplateMediaPreview templateId={selectedTemplateId} asset={selectedTemplate?.workflow?.assets?.find(a => a.id === templateAsset)} />
+                  </div>}
               </div>
               <div>
                 <label className="mb-2 block text-xs font-semibold text-gray-700">Message Body</label>
                 <textarea
+                  readOnly={Boolean(selectedTemplateId)}
                   rows={6}
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
@@ -428,10 +447,10 @@ export default function BulkSenderTab({
               />
 
               {/* Interactive Buttons (Feature 4: Add Button) */}
-              <InteractiveButtonsBuilder buttons={buttons} onChange={setButtons} />
+              {!selectedTemplateId && <InteractiveButtonsBuilder buttons={buttons} onChange={setButtons} />}
 
               {/* Multiple Media Attachments (Feature 8: Send multiple files) */}
-              <MediaAttachmentManager mediaFiles={mediaFiles} onChange={setMediaFiles} />
+              {!selectedTemplateId && <MediaAttachmentManager mediaFiles={mediaFiles} onChange={setMediaFiles} />}
             </CardContent>
           </Card>
 
