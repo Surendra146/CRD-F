@@ -10,3 +10,8 @@ export function isSupportedApprovedTemplate(template, wabaId) {
     return p.type !== 'BUTTONS' || (p.buttons || []).every(b => ['URL', 'PHONE_NUMBER', 'QUICK_REPLY'].includes(b.type));
   });
 }
+
+export function templateRejectionReason(value) {
+  const reason = String(value ?? '').trim();
+  return ['', 'none', 'null', 'undefined'].includes(reason.toLowerCase()) ? null : reason;
+}

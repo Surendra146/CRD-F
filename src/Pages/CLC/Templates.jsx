@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import Header from '../../components/Layout/Header.jsx';
 import Button from '../../components/UI/button.jsx';
 import Modal from '../../components/UI/modal.jsx';
+import { templateRejectionReason } from '../../utils/metaTemplates.js';
 import { templatesApi } from '../../services/templates.js';
 import { saasApi } from '../../services/saas.js';
 import { useAuthStore } from '../../store/authstore.js';
@@ -105,8 +106,8 @@ export default function Templates() {
           <p className="text-sm text-gray-600">{row.content?.language || approved?.language} · {row.category} · {row.content?.header?.type || approved?.header_type || 'NONE'}</p>
           <p className="break-all text-xs text-gray-500">Account: {row.content?.sender_phone_number_id || approved?.sender_phone_number_id || 'Select in draft'}<br />WABA: {approved?.waba_id || row.targeting?.waba_id || 'Not submitted'}</p>
           {approved && <p className="text-sm text-green-700">Approved for sending: {approved.name} ({approved.language})</p>}
-          {w.draft_revision > (w.submitted_revision || 0) && <p className="text-xs text-amber-700">Local draft has unpublished edits</p>}
-          {w.rejection_reason && <p role="alert" className="text-sm text-red-700">{w.rejection_reason}</p>}
+          {w.has_unpublished_edits === true && <p className="text-xs text-amber-700">Local draft has unpublished edits</p>}
+          {templateRejectionReason(w.rejection_reason) && <p role="alert" className="text-sm text-red-700">{templateRejectionReason(w.rejection_reason)}</p>}
           {w.submission_error && <p className="text-sm text-amber-700">{w.submission_error}</p>}
           <p className="text-xs text-gray-500">Last sync: {w.synced_at || row.stats?.synced_at || 'Never'}</p>
           <div className="flex flex-wrap gap-2">

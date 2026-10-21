@@ -23,3 +23,11 @@ test('bulk choices exclude formats the sender cannot implement', () => {
   const authentication = template(); authentication.workflow.approved.category = 'AUTHENTICATION';
   assert.equal(isSupportedApprovedTemplate(authentication, '123'), false);
 });
+
+ test('template warnings suppress empty rejection reasons and retain real reasons', async () => {
+  const { templateRejectionReason } = await import('../src/utils/metaTemplates.js');
+  for (const reason of [null, undefined, '', 'NONE', 'none', ' NONE ']) {
+    assert.equal(templateRejectionReason(reason), null);
+  }
+  assert.equal(templateRejectionReason('Policy violation'), 'Policy violation');
+});
