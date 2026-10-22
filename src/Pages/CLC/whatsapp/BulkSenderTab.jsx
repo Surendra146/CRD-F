@@ -1,3 +1,4 @@
+import TemplateParameters from './TemplateParameters.jsx';
 import { useState, useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -20,9 +21,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../../components/UI
 import Select from '../../../components/UI/select.jsx';
 import Input from '../../../components/UI/input.jsx';
 import Badge from '../../../components/UI/badge.jsx';
-import { isSupportedApprovedTemplate } from '../../../utils/metaTemplates.js';
-import { templatesApi } from '../../../services/templates.js';
+import { templatePreview, isSupportedApprovedTemplate } from '../../../utils/metaTemplates.js';
 import { saasApi } from '../../../services/saas.js';
+import { templatesApi } from '../../../services/templates.js';
+
 import { TemplateMediaPreview } from '../Templates.jsx';
 import { communicationsApi } from '../../../services/communications.js';
 import InteractiveButtonsBuilder from './InteractiveButtonsBuilder.jsx';
@@ -54,17 +56,14 @@ export default function BulkSenderTab({
 
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [message, setMessage] = useState('');
-  const [sender, setSender] = useState('');
   const [templateAsset, setTemplateAsset] = useState('');
   const [uploading, setUploading] = useState(false);
   const [externalMappings, setExternalMappings] = useState({});
-  const numbers = useQuery({ queryKey: ['whatsapp-numbers'], queryFn: saasApi.numbers });
-  const accounts = numbers.data?.data || [];
-  const account = accounts.find(n => n.phone_number_id === sender) || accounts.find(n => n.is_default) || accounts[0];
+  const account = configuration.data?.data?.sender;
   const selectedTemplate = templates.find(t => String(t._id || t.id) === String(selectedTemplateId));
   const approved = selectedTemplate?.workflow?.approved;
   const requiredHeader = approved?.header_type;
-  const externalScopes = (approved?.components || []).flatMap(p => p.type === 'BUTTONS' ? (p.buttons || []).flatMap((b, i) => b.type === 'URL' && /\{\{/.test(b.url || '') ? [[`button_${i}`, 1]] : []) : ['HEADER', 'BODY'].includes(p.type) ? [[p.type.toLowerCase(), new Set((p.text || '').match(/\{\{\d+\}\}/g) || []).size]] : []).filter(([scope, count]) => count && !approved?.parameters?.[scope]?.length);
+  const externalScopes = (approved?.components || []).flatMap(p => p.type === 'BUTTONS' ? (p.buttons || []).flatMap((b, i) => (b.type === 'COPY_CODE' || (b.type === 'URL' && /\{\{/.test(b.url || ''))) ? [[`button_${i}`, 1]] : []) : ['HEADER', 'BODY'].includes(p.type) ? [[p.type.toLowerCase(), new Set((p.text || '').match(/\{\{\s*(?:[a-zA-Z_][\w.]*|[1-9]\d*)\s*\}\}/g) || []).size]] : []).filter(([scope, count]) => count && !approved?.parameters?.[scope]?.length);
   const [buttons, setButtons] = useState([]);
   const [mediaFiles, setMediaFiles] = useState([]);
 
@@ -152,6 +151,8 @@ export default function BulkSenderTab({
     lifecycle: { totalSpent: 1250, segment: 'Loyal' },
   }, [audienceAudited, previewCustomerIndex]);
 
+  const preview = templatePreview(approved, previewRecipient, externalMappings);
+  const previewButtons = approved ? preview.buttons : buttons;
   const resolvedPreviewMessage = useMemo(() => {
     let text = message || 'Write your message above to see a live preview...';
     if (enableSpintax) {
@@ -190,6 +191,7 @@ export default function BulkSenderTab({
   const handleSubmit = (e) => {
     e.preventDefault();
     if (bulkSendMutation.isPending || uploading) return;
+    if (!account) { toast.error(configuration.data?.data?.sender_error || 'Unable to resolve sender. Retry or check Settings.'); return; }
     if (selectedTemplateId && approved?.waba_id !== account?.waba_id) { toast.error('Select a template for this sending account'); return; }
     if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(requiredHeader) && !templateAsset) { toast.error('Select send-time media'); return; }
 
@@ -237,7 +239,6 @@ export default function BulkSenderTab({
       },
       message: message.trim(),
       template: selectedTemplateId ? { id: Number(selectedTemplateId), media_asset_id: templateAsset || undefined, mappings: externalMappings } : undefined,
-      sender_phone_number_id: sender || undefined,
       buttons,
       media_files: mediaFiles,
       batch_delay_seconds: Number(batchDelaySeconds),
@@ -409,13 +410,14 @@ export default function BulkSenderTab({
             <CardContent className="space-y-4">
               <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
                 <p>Custom text requires the recipient to have messaged your business within the last 24 hours. Otherwise use an approved Meta template. A saved CRM message is not a Meta-approved template.</p>
-                  <label className="mt-3 block">Sending account / WABA
-                    <select className="mt-1 w-full rounded border bg-white p-2" value={sender} onChange={e => { setSender(e.target.value); handleApplyTemplate(''); }}>
-                      <option value="">Default connected account</option>{accounts.filter(n => n.connected).map(n => <option key={n.phone_number_id} value={n.phone_number_id}>{n.display_phone_number || n.phone_number_id} / {n.waba_id}</option>)}
-                    </select>
-                  </label>
+                  <Button type="button" onClick={async () => {
+                    try { await saasApi.syncTemplates(); await queryClient.invalidateQueries({ queryKey: ['templates'] }); toast.success('Templates synchronized'); }
+                    catch (error) { toast.error(error.response?.data?.detail || 'Meta template synchronization failed. Retry.'); }
+                  }}>Refresh Meta templates</Button>
+                  {!templateOptions.slice(1).length && <p role="status">No approved templates available for this sender. Refresh Meta templates.</p>}
+                  {!account && <p role="alert">{configuration.data?.data?.sender_error || "Resolving WhatsApp sender. Retry if unavailable."}</p>}
                   {approved && <p className="mt-2 text-xs">Sending exact approved template: {approved.name} ({approved.language}). Recipient fields are resolved separately for every message.</p>}
-                  {externalScopes.map(([scope, count]) => <div key={scope} className="mt-3"><p>{scope} recipient mappings</p>{Array.from({ length: count }, (_, i) => <select key={i} className="m-1 rounded border p-2" value={externalMappings[scope]?.[i] || ''} onChange={e => { const values = [...(externalMappings[scope] || Array(count).fill(''))]; values[i] = e.target.value; setExternalMappings({ ...externalMappings, [scope]: values }); }}><option value="">Parameter {i + 1}: select field</option>{['name', 'phone', 'email', 'city', 'lifecycle.segment', 'lifecycle.totalSpent', 'demographics.city'].map(f => <option key={f}>{f}</option>)}</select>)}</div>)}
+                  <TemplateParameters scopes={externalScopes} mappings={externalMappings} onChange={setExternalMappings} />
                   {['IMAGE', 'VIDEO', 'DOCUMENT'].includes(requiredHeader) && <div className="mt-3 space-y-2">
                     <p>Send-time {requiredHeader.toLowerCase()} · shared campaign asset</p>
                     <select className="w-full rounded border bg-white p-2" value={templateAsset} onChange={e => setTemplateAsset(e.target.value)}><option value="">Select uploaded media</option>{(selectedTemplate?.workflow?.assets || []).filter(a => a.type.toUpperCase() === requiredHeader).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select>
@@ -551,6 +553,7 @@ export default function BulkSenderTab({
                 <Button
                   type="submit"
                   size="lg"
+                  disabled={!account || uploading}
                   isLoading={bulkSendMutation.isPending}
                 >
                   {deliveryMode === 'scheduled' ? (
@@ -620,20 +623,27 @@ export default function BulkSenderTab({
                     </div>
                   )}
 
+                  {approved && <>
+                    {preview.header && <p className="font-semibold whitespace-pre-wrap">{preview.header}</p>}
+                    {['IMAGE', 'VIDEO', 'DOCUMENT'].includes(requiredHeader) && (templateAsset
+                      ? <TemplateMediaPreview templateId={selectedTemplateId} asset={selectedTemplate?.workflow?.assets?.find(a => a.id === templateAsset)} />
+                      : <p role="status">Select required {requiredHeader.toLowerCase()} for sending</p>)}
+                  </>}
                   {/* Body Text */}
                   <p className="whitespace-pre-wrap text-xs leading-relaxed text-gray-800">
-                    {resolvedPreviewMessage}
+                    {approved ? preview.body : resolvedPreviewMessage}
                   </p>
 
+                  {approved && preview.footer && <p className="text-xs text-gray-500">{preview.footer}</p>}
                   <div className="flex justify-end items-center gap-1 text-[10px] text-gray-500">
                     <span>{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                     <span className="text-blue-500 font-bold">✓✓</span>
                   </div>
 
                   {/* Interactive Buttons rendered in WhatsApp style */}
-                  {buttons.length > 0 && (
+                  {previewButtons.length > 0 && (
                     <div className="pt-1.5 border-t border-emerald-200/80 space-y-1">
-                      {buttons.map((btn, i) => (
+                      {previewButtons.map((btn, i) => (
                         <div
                           key={i}
                           className="rounded-lg bg-white py-1.5 px-3 text-center text-xs font-semibold text-[#00A884] shadow-xs border border-gray-200 flex items-center justify-center gap-1.5 hover:bg-gray-50 cursor-pointer"

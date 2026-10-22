@@ -1,3 +1,4 @@
+import TemplateParameters from './whatsapp/TemplateParameters.jsx';
 import { formatApiError } from '../../config/apiContract.js';
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -22,8 +23,9 @@ import {
 } from '../../components/UI/table.jsx';
 import { campaignsApi } from '../../services/campaigns.js';
 import { segmentsApi } from '../../services/segments.js';
-import { saasApi } from '../../services/saas.js';
-import { isSupportedApprovedTemplate } from '../../utils/metaTemplates.js';
+import { communicationsApi } from '../../services/communications.js';
+import { templatePreview, isSupportedApprovedTemplate } from '../../utils/metaTemplates.js';
+import { TemplateMediaPreview } from './Templates.jsx';
 import { templatesApi } from '../../services/templates.js';
 import { useAuthStore } from '../../store/authstore.js';
 import { normalizeAllowedModules } from '../../utils/moduleAccess.js';
@@ -94,7 +96,6 @@ const initialCampaignForm = {
   description: '',
   type: 'one_time',
   template: '',
-  sender: '',
   mediaAsset: '',
   templateMappings: {},
   audienceType: 'all',
@@ -145,13 +146,13 @@ export default function Campaigns() {
     [savedSegments, campaigns]
   );
 
-  const numbers = useQuery({ queryKey: ['whatsapp-numbers'], queryFn: saasApi.numbers });
-  const accounts = numbers.data?.data || [];
-  const account = accounts.find(n => n.phone_number_id === campaignForm.sender) || accounts.find(n => n.is_default) || accounts[0];
+  const configuration = useQuery({ queryKey: ['whatsapp-configuration'], queryFn: communicationsApi.configuration });
+  const account = configuration.data?.data?.sender;
   const selectedTemplate = templates.find(t => String(t._id || t.id) === String(campaignForm.template));
   const approved = selectedTemplate?.workflow?.approved;
+  const preview = templatePreview(approved, {}, campaignForm.templateMappings);
   const mediaHeader = ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(approved?.header_type);
-  const externalScopes = (approved?.components || []).flatMap(p => p.type === 'BUTTONS' ? (p.buttons || []).flatMap((b, i) => b.type === 'URL' && /\{\{/.test(b.url || '') ? [[`button_${i}`, 1]] : []) : ['HEADER', 'BODY'].includes(p.type) ? [[p.type.toLowerCase(), new Set((p.text || '').match(/\{\{\d+\}\}/g) || []).size]] : []).filter(([scope, count]) => count && !approved?.parameters?.[scope]?.length);
+  const externalScopes = (approved?.components || []).flatMap(p => p.type === 'BUTTONS' ? (p.buttons || []).flatMap((b, i) => (b.type === 'COPY_CODE' || (b.type === 'URL' && /\{\{/.test(b.url || ''))) ? [[`button_${i}`, 1]] : []) : ['HEADER', 'BODY'].includes(p.type) ? [[p.type.toLowerCase(), new Set((p.text || '').match(/\{\{\s*(?:[a-zA-Z_][\w.]*|[1-9]\d*)\s*\}\}/g) || []).size]] : []).filter(([scope, count]) => count && !approved?.parameters?.[scope]?.length);
   const templateOptions = templates.filter(t => isSupportedApprovedTemplate(t, account?.waba_id)).map((template) => ({
     label: `${template.name} (${template.category || 'custom'})`,
     value: template._id,
@@ -279,7 +280,6 @@ export default function Campaigns() {
       audience: {
         type: campaignForm.audienceType,
         filters,
-        sender_phone_number_id: campaignForm.sender || account?.phone_number_id,
         template_media_asset_id: campaignForm.mediaAsset || undefined,
         template_mappings: campaignForm.templateMappings,
       },
@@ -525,8 +525,6 @@ export default function Campaigns() {
                 { label: 'Recurring', value: 'recurring' },
               ]}
             />
-
-            <Select label="Sending account / WABA" value={campaignForm.sender} onChange={e => setCampaignForm(prev => ({ ...prev, sender: e.target.value, template: '', mediaAsset: '', templateMappings: {} }))} options={[{ label: 'Default account', value: '' }, ...accounts.filter(n => n.connected).map(n => ({ label: `${n.display_phone_number || n.phone_number_id} / ${n.waba_id}`, value: n.phone_number_id }))]} />
             <Select
               label="Template *"
               value={campaignForm.template}
@@ -537,11 +535,19 @@ export default function Campaigns() {
             />
           </div>
 
+          {!account && <p role="alert">{configuration.data?.data?.sender_error || 'Unable to resolve sender. Retry or check Settings.'}</p>}
+          {approved && <div className="rounded-lg bg-emerald-50 p-4 space-y-2" aria-label="Approved template preview">
+            {preview.header && <p className="font-semibold">{preview.header}</p>}
+            {mediaHeader && <TemplateMediaPreview templateId={campaignForm.template} asset={selectedTemplate?.workflow?.assets?.find(a => a.id === campaignForm.mediaAsset)} />}
+            <p className="whitespace-pre-wrap">{preview.body}</p>
+            {preview.footer && <p className="text-xs text-gray-500">{preview.footer}</p>}
+            {preview.buttons.map((button, index) => <div className="border-t py-2 text-center" key={index}>{button.text}</div>)}
+          </div>}
           {mediaHeader && <div className="space-y-2 rounded-lg border p-3">
             <Select label={`Send-time ${approved.header_type.toLowerCase()} (shared asset)`} value={campaignForm.mediaAsset} onChange={e => setCampaignForm(prev => ({ ...prev, mediaAsset: e.target.value }))} options={[{ label: 'Select uploaded media', value: '' }, ...(selectedTemplate?.workflow?.assets || []).filter(a => a.type.toUpperCase() === approved.header_type).map(a => ({ label: a.name, value: a.id }))]} />
             <p className="text-xs text-gray-500">Upload or replace assets in Templates or Bulk Sender before creating this campaign.</p>
           </div>}
-          {externalScopes.map(([scope, count]) => <div key={scope} className="space-y-2"><p className="text-sm">{scope} recipient mappings</p>{Array.from({ length: count }, (_, i) => <select key={i} className="rounded border p-2" value={campaignForm.templateMappings[scope]?.[i] || ''} onChange={e => { const values = [...(campaignForm.templateMappings[scope] || Array(count).fill(''))]; values[i] = e.target.value; setCampaignForm(prev => ({ ...prev, templateMappings: { ...prev.templateMappings, [scope]: values } })); }}><option value="">Parameter {i + 1}: select field</option>{['name', 'phone', 'email', 'city', 'lifecycle.segment', 'lifecycle.totalSpent', 'demographics.city'].map(f => <option key={f}>{f}</option>)}</select>)}</div>)}
+          <TemplateParameters scopes={externalScopes} mappings={campaignForm.templateMappings} onChange={templateMappings => setCampaignForm(prev => ({ ...prev, templateMappings }))} />
           <Select
             label="Audience Type"
             value={campaignForm.audienceType}
@@ -653,7 +659,7 @@ export default function Campaigns() {
           </div>
 
           <div className="flex justify-end">
-            <Button type="submit" isLoading={createCampaignMutation.isPending}>
+            <Button type="submit" disabled={!account} isLoading={createCampaignMutation.isPending}>
               Create Campaign
             </Button>
           </div>

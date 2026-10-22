@@ -16,7 +16,7 @@ test('bulk choices require an approved compatible WABA', () => {
 });
 
 test('bulk choices exclude formats the sender cannot implement', () => {
-  for (const part of [{ type: 'CAROUSEL' }, { type: 'HEADER', format: 'LOCATION' }, { type: 'BODY', text: 'Hi {{name}} there' }, { type: 'BUTTONS', buttons: [{ type: 'FLOW' }] }]) {
+  for (const part of [{ type: 'CAROUSEL' }, { type: 'HEADER', format: 'LOCATION' }, { type: 'BUTTONS', buttons: [{ type: 'FLOW' }] }]) {
     const value = template(); value.workflow.approved.components.push(part);
     assert.equal(isSupportedApprovedTemplate(value, '123'), false);
   }
@@ -30,4 +30,30 @@ test('bulk choices exclude formats the sender cannot implement', () => {
     assert.equal(templateRejectionReason(reason), null);
   }
   assert.equal(templateRejectionReason('Policy violation'), 'Policy violation');
+});
+
+test('approved preview preserves all components and substitutes the same recipient mappings', async () => {
+  const { templatePreview } = await import('../src/utils/metaTemplates.js');
+  const definition = { parameters: { body: [{ field: 'name' }] }, components: [
+    { type: 'HEADER', format: 'TEXT', text: 'Hello {{1}}' },
+    { type: 'BODY', text: 'Welcome {{1}}' }, { type: 'FOOTER', text: 'Terms apply' },
+    { type: 'BUTTONS', buttons: [{ type: 'URL', text: 'Visit', url: 'https://example.com/{{1}}' },
+      { type: 'PHONE_NUMBER', text: 'Call', phone_number: '+919000000000' }, { type: 'QUICK_REPLY', text: 'Yes' }] },
+  ] };
+  const before = JSON.stringify(definition);
+  const preview = templatePreview(definition, { name: 'Asha', phone: '123' }, { header: ['name'], button_0: ['phone'] });
+  assert.equal(preview.header, 'Hello Asha'); assert.equal(preview.body, 'Welcome Asha');
+  assert.equal(preview.footer, 'Terms apply');
+  assert.deepEqual(preview.buttons.map(b => b.type), ['url', 'phone_number', 'quick_reply']);
+  assert.equal(preview.buttons[0].url, 'https://example.com/123');
+  assert.equal(JSON.stringify(definition), before);
+  assert.equal(templatePreview().body, '');
+});
+
+test('named parameters and copy code templates are selectable and preview consistently', async () => {
+  const { templatePreview } = await import('../src/utils/metaTemplates.js');
+  const value = template();
+  value.workflow.approved.components = [{ type: 'BODY', text: 'Hi {{first_name}} there' }, { type: 'BUTTONS', buttons: [{ type: 'COPY_CODE', text: 'Copy code' }] }];
+  assert.equal(isSupportedApprovedTemplate(value, '123'), true);
+  assert.equal(templatePreview(value.workflow.approved, { name: 'Asha' }, { body: ['name'] }).body, 'Hi Asha there');
 });
