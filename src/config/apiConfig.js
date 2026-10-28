@@ -1,3 +1,4 @@
+import { devAccessEnabled, getDevToken, clearDevAccess, resolveDevAccessBase } from '../services/devAccess';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import { io } from 'socket.io-client';
@@ -10,7 +11,7 @@ export { formatApiError } from './apiContract';
 export const BASE_URL = resolveBackendUrl(import.meta.env);
 export const SOCKET_URL = BASE_URL;
 export const SOCKET_PROGRESS_ENABLED =
-  import.meta.env.VITE_ENABLE_SOCKET_PROGRESS === 'true';
+  !devAccessEnabled && import.meta.env.VITE_ENABLE_SOCKET_PROGRESS === 'true';
 
 /* =========================
    WHATSAPP CONFIG (FIXED)
@@ -47,7 +48,7 @@ export const getStoredAuthToken = () => {
 const api = axios.create({
   baseURL: BASE_URL,
   timeout: 120000,
-  withCredentials: true,
+  withCredentials: !devAccessEnabled,
 });
 
 /* =========================
@@ -55,6 +56,14 @@ const api = axios.create({
 ========================= */
 api.interceptors.request.use(
   (config) => {
+    if (devAccessEnabled) {
+      const base = resolveDevAccessBase(config.baseURL ?? BASE_URL);
+      const target = new URL(config.url, base);
+      if (target.origin !== new URL(resolveDevAccessBase(BASE_URL)).origin) throw new Error('Development request origin blocked');
+      const devToken = getDevToken();
+      if (!devToken) throw new Error('Development access required');
+      config.headers['X-Dev-Access-Token'] = devToken;
+    }
     const token = getStoredAuthToken();
 
     if (token) {
@@ -85,6 +94,10 @@ api.interceptors.response.use(
     const status = error?.response?.status;
     const message = formatApiError(error);
 
+    if (devAccessEnabled && error?.response?.data?.code === 'dev_access_required') {
+      clearDevAccess();
+      return Promise.reject(new Error('Development session expired. Authenticate again.'));
+    }
     if (status === 401) {
       delete api.defaults.headers.common.Authorization;
       localStorage.removeItem('auth-storage');
@@ -129,6 +142,7 @@ export const apiWrapper = async ({
 let socketInstance = null;
 
 export const getSocketClient = () => {
+  if (devAccessEnabled) throw new Error('Sockets blocked by development gateway');
   const token = getStoredAuthToken();
 
   if (!socketInstance) {

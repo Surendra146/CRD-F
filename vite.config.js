@@ -1,12 +1,17 @@
-import { defineConfig, loadEnv } from 'vite'
+import { defineConfig, loadEnv, mergeConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { validateRenderApiOrigin } from './src/config/apiContract.js'
+import { localGatewayOptions } from './scripts/local-gateway-config.mjs'
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, command }) => {
+  const localOptions = localGatewayOptions(command, mode);
+  if (mode === 'dev-access-local' && process.env.RENDER === 'true') {
+    throw new Error('Local gateway testing cannot run on Render');
+  }
   if (process.env.RENDER === 'true') {
     validateRenderApiOrigin({ ...loadEnv(mode, process.cwd(), 'VITE_'), ...process.env });
   }
-  return {
+  return mergeConfig({
   plugins: [react(), {
     name: 'public-privacy-policy',
     configureServer(server) {
@@ -42,7 +47,7 @@ export default defineConfig(({ mode }) => {
   optimizeDeps: {
     include: ['tslib']
   }
-  };
+  }, localOptions);
 })
 
 function servePrivacyPolicy(req, _res, next) {

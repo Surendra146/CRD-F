@@ -1,3 +1,4 @@
+import DevAccessGate from './components/DevAccessGate';
 import { useEffect, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
@@ -41,9 +42,11 @@ function Workspace() {
   );
 }
 
-export default function App() {
+function AuthenticatedApp() {
   const { initAuth, user } = useAuthStore();
   useEffect(() => { initAuth(); }, [initAuth]);
   const workspaceKey = user ? `${user.tenant_id || user.tenantId}:${user.organization_id || user.organizationId}:${user.id}` : 'public';
   return <Workspace key={workspaceKey} />;
 }
+
+export default function App() { return <DevAccessGate><AuthenticatedApp /></DevAccessGate>; }
