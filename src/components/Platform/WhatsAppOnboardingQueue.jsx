@@ -8,10 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '../UI/card';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '../UI/dialog';
 import WhatsAppOnboardingProgress from '../whatsapp/WhatsAppOnboardingProgress';
 import { platformApi } from '../../services/saas';
-import { statusLabel, filterRequests, subscriptionDialog, testDelivery, deliveryPolling } from '../../services/onboarding';
+import { statusLabel, filterRequests, subscriptionDialog, testDelivery, deliveryPolling, canResetWhatsApp, resetPayload } from '../../services/onboarding';
 import { formatApiError } from '../../services/api';
 
-export default function WhatsAppOnboardingQueue({ onViewSubscription }) {
+export default function WhatsAppOnboardingQueue({ onViewSubscription, permissions = [] }) {
   const client = useQueryClient();
   const requests = useQuery({ queryKey: ['platform-onboarding'], queryFn: platformApi.onboarding, refetchInterval: (query) => deliveryPolling(query.state.data?.data), refetchIntervalInBackground: false });
   const [search, setSearch] = useState('');
@@ -36,9 +36,11 @@ export default function WhatsAppOnboardingQueue({ onViewSubscription }) {
     try {
       let verificationResponse;
       if (nextStatus === 'verify') verificationResponse = await platformApi.verifyOnboarding(row.id, values);
+      else if (nextStatus === 'reset') verificationResponse = await platformApi.resetOnboarding(row.id, values);
       else await platformApi.updateOnboarding(row.id, { status: nextStatus, ...values });
       await Promise.all(['platform-onboarding', 'platform-overview', 'platform-audit'].map((key) => client.invalidateQueries({ queryKey: [key] })));
-      if (nextStatus === 'accepted') setDialog({ title: 'Request Accepted', message: 'WhatsApp onboarding request accepted successfully. You can now start the setup process.', success: true });
+      if (nextStatus === 'reset') setDialog({ title: 'WhatsApp Setup Reset', success: true, message: verificationResponse?.data?.meta_cleanup_required ? `Ready for new onboarding. Manual Meta cleanup required: ${verificationResponse.data.manual_meta_action}` : 'Ready for new onboarding. The subscription is unchanged.' });
+      else if (nextStatus === 'accepted') setDialog({ title: 'Request Accepted', message: 'WhatsApp onboarding request accepted successfully. You can now start the setup process.', success: true });
       else { setDialog(null); toast.success(nextStatus === 'verify' ? (verificationResponse?.test_action === 'reused' || verificationResponse?.data?.test_action === 'reused' ? 'Existing test reused; see its current delivery status below.' : 'Meta accepted the test; delivery is not confirmed.') : 'Request updated'); }
     } catch (error) {
       const subscriptionError = subscriptionDialog(error);
@@ -51,7 +53,7 @@ export default function WhatsAppOnboardingQueue({ onViewSubscription }) {
   return <Card><CardHeader><CardTitle>WhatsApp Onboarding Queue</CardTitle></CardHeader><CardContent className="space-y-4">
     <div className="grid gap-3 md:grid-cols-3">
       <Input label="Search tenant or business" aria-label="Search tenant or business" value={search} onChange={(event) => { setSearch(event.target.value); setPage(0); }} />
-      <label className="text-sm">Onboarding status<select className="mt-2 block min-h-10 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" value={status} onChange={(event) => { setStatus(event.target.value); setPage(0); }}><option value="">All statuses</option>{['requested', 'accepted', 'setup_in_progress', 'action_required', 'connected', 'rejected', 'failed', 'cancelled'].map((value) => <option key={value} value={value}>{statusLabel(value)}</option>)}</select></label>
+      <label className="text-sm">Onboarding status<select className="mt-2 block min-h-10 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" value={status} onChange={(event) => { setStatus(event.target.value); setPage(0); }}><option value="">All statuses</option>{['requested', 'accepted', 'setup_in_progress', 'action_required', 'connected', 'rejected', 'failed', 'cancelled', 'reset'].map((value) => <option key={value} value={value}>{statusLabel(value)}</option>)}</select></label>
       <label className="text-sm">Subscription status<select className="mt-2 block min-h-10 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" value={subscription} onChange={(event) => { setSubscription(event.target.value); setPage(0); }}><option value="">All subscriptions</option>{['none', 'active', 'expired', 'cancelled', 'scheduled'].map((value) => <option key={value} value={value}>{statusLabel(value)}</option>)}</select></label>
     </div>
     {requests.isPending && <p role="status">Loading onboarding queue…</p>}
@@ -59,7 +61,7 @@ export default function WhatsAppOnboardingQueue({ onViewSubscription }) {
     <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr>{['Tenant', 'Organization ID', 'Business', 'WhatsApp number', 'Requested', 'Subscription', 'Onboarding', 'Assigned administrator', 'Actions'].map((label) => <th className="whitespace-nowrap border-b p-3" key={label}>{label}</th>)}</tr></thead><tbody>
       {rows.slice(currentPage * 10, currentPage * 10 + 10).map((row) => <tr key={row.id} className="border-b border-gray-100 align-top hover:bg-gray-50">
         <td className="p-3">{row.tenant_name || row.tenant_id}</td><td className="p-3">{row.organization_id}</td><td className="p-3">{row.business_name}</td><td className="whitespace-nowrap p-3">+{row.phone}</td><td className="p-3">{new Date(row.created_at).toLocaleDateString('en-IN')}</td><td className="p-3">{statusLabel(row.subscription_status)}</td><td className="p-3">{statusLabel(row.status)}</td><td className="p-3">{row.assigned_admin_id || 'Unassigned'}</td>
-        <td className="p-3 align-top"><div className="flex w-56 max-w-full flex-wrap items-center gap-2"><Button size="sm" variant="secondary" aria-label={`View onboarding details for ${row.business_name}`} aria-expanded={selected === row.id} onClick={() => { setSelected(row.id); setMessage(''); }}><Eye className="h-4 w-4" aria-hidden="true" />Details</Button>{onViewSubscription && <Button size="sm" variant="secondary" aria-label={`View subscription for ${row.business_name}`} onClick={() => viewSubscription(row)}><FileText className="h-4 w-4" aria-hidden="true" />View Subscription</Button>}{row.status === 'requested' && <><Button size="sm" disabled={busy} isLoading={pendingAction === `${row.id}:accepted`} onClick={() => act(row, 'accepted')}>Accept Request</Button><Button size="sm" variant="danger" disabled={busy} onClick={() => actionDialog(row, 'rejected')}>Reject Request</Button></>}</div></td>
+        <td className="p-3 align-top"><div className="flex w-56 max-w-full flex-wrap items-center gap-2"><Button size="sm" variant="secondary" aria-label={`View onboarding details for ${row.business_name}`} aria-expanded={selected === row.id} onClick={() => { setSelected(row.id); setMessage(''); }}><Eye className="h-4 w-4" aria-hidden="true" />Details</Button>{onViewSubscription && <Button size="sm" variant="secondary" aria-label={`View subscription for ${row.business_name}`} onClick={() => viewSubscription(row)}><FileText className="h-4 w-4" aria-hidden="true" />View Subscription</Button>}{permissions.includes('onboarding.reset') && <Button size="sm" variant="danger" disabled={busy || !canResetWhatsApp(permissions, row)} onClick={() => { setMessage(''); setDialog({ row, reset: true, title: 'Reset WhatsApp Setup?', message: 'This clears the current local WhatsApp setup and cancels pending sends. The tenant can start again with a new or existing eligible number. Subscription and message history are preserved. Meta permissions are not automatically revoked.' }); }}>Reset WhatsApp</Button>}{row.status === 'requested' && <><Button size="sm" disabled={busy} isLoading={pendingAction === `${row.id}:accepted`} onClick={() => act(row, 'accepted')}>Accept Request</Button><Button size="sm" variant="danger" disabled={busy} onClick={() => actionDialog(row, 'rejected')}>Reject Request</Button></>}</div></td>
       </tr>)}
     </tbody></table></div>
     {!requests.isPending && !requests.isError && rows.length === 0 && <p>No matching requests.</p>}
@@ -69,6 +71,7 @@ export default function WhatsAppOnboardingQueue({ onViewSubscription }) {
       <p>Requested +{detail.phone} · Subscription: {statusLabel(detail.subscription_status)} · Administrator: {detail.assigned_admin_id || 'Unassigned'}</p>
       {detail.eligibility_error && <p role="alert" className="text-amber-800">{detail.eligibility_error[1]}</p>}
       <WhatsAppOnboardingProgress request={detail} />
+      {detail.status === 'reset' && <p role="status">Ready for new onboarding. {(detail.history || []).findLast((event) => event.event === 'reset')?.meta_cleanup_required && 'Manual Meta cleanup is required; review the reset audit before removing old access in Meta Business Settings.'}</p>}
       {detail.customer_message && <p className="whitespace-pre-wrap">Instructions: {detail.customer_message}</p>}
       {detail.tenant_confirmed_at && <p className="text-green-700">Tenant confirmed completion {new Date(detail.tenant_confirmed_at).toLocaleString('en-IN')}. Review before resuming.</p>}
       <div className="flex flex-wrap gap-3">
@@ -107,6 +110,11 @@ export default function WhatsAppOnboardingQueue({ onViewSubscription }) {
       <h4 className="font-medium">Setup timeline</h4><ol className="space-y-2 text-sm">{(detail.history || []).map((event, index) => <li key={index}>{new Date(event.at).toLocaleString('en-IN')} · {statusLabel(event.event)} · Actor {event.actor_id || 'Migration'}</li>)}</ol>
     </section>}
     <Dialog open={Boolean(dialog)} onOpenChange={(open) => { if (!open && !busy) setDialog(null); }}><DialogContent className="bg-white"><DialogTitle>{dialog?.title}</DialogTitle><DialogDescription>{dialog?.message}</DialogDescription>
+      {dialog?.reset && <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); if (canResetWhatsApp(permissions, dialog.row) && message.trim()) act(dialog.row, 'reset', resetPayload(message)); }}>
+        <p>Tenant: {dialog.row.tenant_name || dialog.row.tenant_id}<br />Current status: {statusLabel(dialog.row.status)}<br />Current number: +{dialog.row.phone}</p>
+        <label className="block">Reset reason<textarea required maxLength={500} className="mt-2 w-full rounded border p-3" value={message} onChange={(event) => setMessage(event.target.value)} /></label>
+        <div className="flex justify-end gap-3"><Button type="button" variant="secondary" disabled={busy} onClick={() => setDialog(null)}>Cancel</Button><Button type="submit" variant="danger" isLoading={busy} disabled={!message.trim() || !permissions.includes('onboarding.reset')}>Reset WhatsApp Setup</Button></div>
+      </form>}
       {dialog?.action && <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); act(dialog.row, dialog.action, { customer_message: message.trim(), ...(dialog.action === 'action_required' ? { required_action: requiredAction } : {}) }); }}>
         <label className="block">{dialog.action === 'rejected' ? 'Rejection reason' : 'Administrator instructions'}<textarea className="mt-2 w-full rounded border p-3" required maxLength={2000} value={message} onChange={(event) => setMessage(event.target.value)} /></label>
         {dialog.action === 'action_required' && <label>Required action<select className="ml-2 rounded border p-2" value={requiredAction} onChange={(event) => setRequiredAction(event.target.value)}>{['meta_authorization', 'phone_verification', 'business_verification', 'other'].map((value) => <option key={value} value={value}>{statusLabel(value)}</option>)}</select></label>}

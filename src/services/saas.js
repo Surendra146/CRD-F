@@ -33,6 +33,7 @@ export const platformApi = {
   createPlan: (data) => api.post('/api/platform/plans', data),
   onboarding: () => api.get('/api/platform/onboarding'),
   updateOnboarding: (id, data) => api.patch(`/api/platform/onboarding/${encodeURIComponent(id)}`, data),
+  resetOnboarding: (id, data) => api.post(`/api/platform/onboarding/${encodeURIComponent(id)}/reset`, data),
   verifyOnboarding: (id, data) => api.post(`/api/platform/onboarding/${encodeURIComponent(id)}/verify`, data),
   audit: () => api.get('/api/platform/audit'),
 };

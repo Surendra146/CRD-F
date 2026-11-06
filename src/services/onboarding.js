@@ -42,3 +42,14 @@ export function deliveryPolling(rows = [], now = Date.now()) {
     && ['accepted', 'sent'].includes(row.verification?.test_result)
     && now - Date.parse(row.verification?.checked_at) < 30 * 60 * 1000) ? 10000 : false;
 }
+
+
+export function canResetWhatsApp(permissions = [], row) {
+  return permissions.includes('onboarding.reset') && Boolean(row) && row.status !== 'reset';
+}
+
+export function resetPayload(reason) {
+  const value = String(reason || '').trim();
+  if (!value || value.length > 500) throw new Error('Enter a reset reason of 1 to 500 characters');
+  return { reason: value };
+}
